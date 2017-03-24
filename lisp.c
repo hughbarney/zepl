@@ -19,6 +19,8 @@
 
 typedef struct Object Object;
 
+
+
 typedef enum Type {
 	TYPE_NUMBER,
 	TYPE_STRING,
@@ -76,6 +78,10 @@ typedef struct Stream {
 	off_t offset, size;
 } Stream;
 
+Stream istream = { .type = STREAM_TYPE_FILE,.fd = STDIN_FILENO };
+Stream ostream = { .type = STREAM_TYPE_FILE,.fd = STDOUT_FILENO };
+//Stream estream = { .type = STREAM_TYPE_FILE,.fd = STDOUT_FILENO };
+
 typedef struct Memory {
 	size_t capacity, fromOffset, toOffset;
 	void *fromSpace, *toSpace;
@@ -88,28 +94,87 @@ static jmp_buf exceptionEnv;
 // EXCEPTION HANDLING /////////////////////////////////////////////////////////
 
 #define exception(...)       exceptionWithObject(NULL, __VA_ARGS__)
+//void exceptionWithObject(Object *, char *, ...);
 
 #ifdef __GNUC__
 void exceptionWithObject(Object * object, char *format, ...)
     __attribute__ ((noreturn, format(printf, 2, 3)));
 #endif
 
-void writeObject(Object * object, bool readably, FILE * file);
+void writeObject(Object * object, bool readably, Stream *);
+#define WRITE_FMT_BUFSIZ 2048
+
+void writeFmt(Stream *stream, char *fmt, ...)
+{
+    static char buf[WRITE_FMT_BUFSIZ];
+    int nbytes;
+    va_list args;
+    va_start(args, fmt);
+    nbytes = vsnprintf(buf, WRITE_FMT_BUFSIZ, fmt, args);
+    va_end(args);
+
+    switch (stream->type) {
+    case STREAM_TYPE_FILE:
+	nbytes = write(stream->fd, buf, nbytes);
+	return;
+
+    case STREAM_TYPE_STRING:
+    default:		
+	return;  // nothing for now
+    }
+}
+
+void writeString(char *str, Stream *stream)
+{
+   int nbytes;
+
+   switch (stream->type) {
+   case STREAM_TYPE_FILE:
+        nbytes = strlen(str);
+        nbytes = write(stream->fd, str, nbytes);
+	return;
+
+    case STREAM_TYPE_STRING:
+    default:		
+	return;  // nothing for now
+    }
+}
+
+void writeChar(char ch, Stream *stream)
+{
+    char str[2];
+    int i = 1;
+    
+    switch (stream->type) {
+    case STREAM_TYPE_FILE:
+	str[0] = ch;
+	i = write(stream->fd, str, i);
+	return;
+
+    case STREAM_TYPE_STRING:
+    default:		
+	return;  // nothing for now
+    }
+}
 
 void exceptionWithObject(Object * object, char *format, ...)
 {
-	fputs("error: ", stderr);
+	static char buf[WRITE_FMT_BUFSIZ];
+	
+	writeString("error: ", &ostream);
 
 	if (object) {
-		writeObject(object, true, stderr);
-		fputc(' ', stderr);
+		writeObject(object, true, &ostream);
+		writeChar(' ', &ostream);
 	}
 
 	va_list args;
 	va_start(args, format);
-	vfprintf(stderr, format, args);
+	int nbytes = snprintf(buf, WRITE_FMT_BUFSIZ, format, args);
 	va_end(args);
-	fputc('\n', stderr);
+
+	writeString(buf, &ostream);
+	writeChar('\n', &ostream);
 
 	longjmp(exceptionEnv, 1);
 }
@@ -705,12 +770,12 @@ Object *readExpr(Stream * stream, GC_PARAM)
 
 // WRITING OBJECTS ////////////////////////////////////////////////////////////
 
-void writeObject(Object * object, bool readably, FILE * file)
+void writeObject(Object * object, bool readably, Stream *stream)
 {
 	switch (object->type) {
 #define CASE(type, ...)                                                      \
   case type:                                                                 \
-    fprintf(file, __VA_ARGS__);                                              \
+    writeFmt(stream, __VA_ARGS__);                                              \
     break
 		CASE(TYPE_NUMBER, "%g", object->number);
 		CASE(TYPE_SYMBOL, "%s", object->string);
@@ -718,54 +783,54 @@ void writeObject(Object * object, bool readably, FILE * file)
 #undef CASE
 	case TYPE_STRING:
 		if (readably) {
-			fputc('"', file);
+			writeChar('"', stream);
 			for (char *string = object->string; *string; ++string) {
 				switch (*string) {
 				case '"':
-					fputs("\\\"", file);
+					writeString("\\\"", stream);
 					break;
 				case '\t':
-					fputs("\\t", file);
+					writeString("\\t", stream);
 					break;
 				case '\r':
-					fputs("\\r", file);
+					writeString("\\r", stream);
 					break;
 				case '\n':
-					fputs("\\n", file);
+					writeString("\\n", stream);
 					break;
 				case '\\':
-					fputs("\\\\", file);
+					writeString("\\\\", stream);
 					break;
 				default:
-					fputc(*string, file);
+					writeChar(*string, stream);
 					break;
 				}
 			}
-			fputc('"', file);
+			writeChar('"', stream);
 		} else
-			fprintf(file, "%s", object->string);
+			writeFmt(stream, "%s", object->string);
 		break;
 	case TYPE_CONS:
-		fputc('(', file);
-		writeObject(object->car, readably, file);
+		writeChar('(', stream);
+		writeObject(object->car, readably, stream);
 		while (object->cdr != nil) {
 			object = object->cdr;
 			if (object->type == TYPE_CONS) {
-				fputc(' ', file);
-				writeObject(object->car, readably, file);
+				writeChar(' ', stream);
+				writeObject(object->car, readably, stream);
 			} else {
-				fputs(" . ", file);
-				writeObject(object, readably, file);
+				writeString(" . ", stream);
+				writeObject(object, readably, stream);
 				break;
 			}
 		}
-		fputc(')', file);
+		writeChar(')', stream);
 		break;
 #define CASE(type, name, object)                                             \
   case type:                                                                 \
-    fprintf(file, "#<%s ", name);                                            \
-    writeObject(object, readably, file);                                     \
-    fprintf(file, ">");                                                      \
+    writeFmt(stream, "#<%s ", name);                                            \
+    writeObject(object, readably, stream);                                     \
+    writeChar('>', stream);                                                    \
     break
 		CASE(TYPE_LAMBDA, "Lambda", object->params);
 		CASE(TYPE_MACRO, "Macro", object->params);
@@ -897,15 +962,15 @@ Object *primitiveCons(Object ** args, GC_PARAM)
 
 Object *primitivePrint(Object ** args, GC_PARAM)
 {
-	fputc('\n', stdout);
-	writeObject((*args)->car, true, stdout);
-	fputc(' ', stdout);
+	writeChar('\n', &ostream);
+	writeObject((*args)->car, true, &ostream);
+	writeChar(' ', &ostream);
 	return (*args)->car;
 }
 
 Object *primitivePrinc(Object ** args, GC_PARAM)
 {
-	writeObject((*args)->car, false, stdout);
+	writeObject((*args)->car, false, &ostream);
 	return (*args)->car;
 }
 
@@ -1220,51 +1285,57 @@ Object *evalExpr(Object ** object, Object ** env, GC_PARAM)
 
 #define LISP(...) #__VA_ARGS__
 
-static char *stdlib = LISP((setq list(lambda args args))
+static char *stdlib = LISP(
+  (setq list (lambda args args))
+  
+  (setq defmacro (macro (name params . body)
+    (list (quote setq) name (list (quote macro) params . body))))
+  
+  (defmacro defun (name params . body)
+    (list (quote setq) name (list (quote lambda) params . body)))
+  
+  (defun null (x) (eq x nil))
+  
+  (defun map1 (func xs)
+    (if (null xs)
+        nil
+        (cons (func (car xs))
+              (map1 func (cdr xs)))))
+  
+  (defmacro and args
+    (cond ((null args) t)
+          ((null (cdr args)) (car args))
+          (t (list (quote if) (car args) (cons (quote and) (cdr args))))))
 
-			   (setq defmacro(macro(name params.body)
-					  (list(quote setq) name(list(quote macro) params.body))))
+  (defmacro or args 
+    (if (null args)
+        nil
+        (cons (quote cond) (map1 list args))))
 
-			   (defmacro defun(name params.body)
-			    (list(quote setq) name(list(quote lambda) params.body)))
+  (defun not (x) (if x nil t))
 
-			   (defun null(x) (eq x nil))
+  (defun consp (x) (not (atom x)))
+  (defun listp (x) (or (null x) (consp x)))
 
-			   (defun map1(func xs)
-			    (if (null xs)
-			     nil(cons(func(car xs))
-				 (map1 func(cdr xs)))))
+  (defun zerop (x) (= x 0))
+  
+  (defun equal (x y)
+    (or (and (atom x) (atom y)
+             (eq x y))
+        (and (not (atom x)) (not (atom y))
+             (equal (car x) (car y))
+             (equal (cdr x) (cdr y)))))
+  
+  (defun nth (n xs)
+    (if (zerop n)
+        (car xs)
+        (nth (- n 1) (cdr xs))))
 
-			   (defmacro and args(cond((null args) t)
-					      ((null(cdr args)) (car args))
-					      (t(list(quote if) (car args) (cons(quote and) (cdr args))))))
-
-			   (defmacro or args(if (null args)
-					     nil(cons(quote cond) (map1 list args))))
-
-			   (defun not(x) (if x nil t))
-
-			   (defun consp(x) (not(atom x)))
-			   (defun listp(x) (or(null x) (consp x)))
-
-			   (defun zerop(x) ( = x 0))
-
-			   (defun equal(x y)
-			    (or(and(atom x) (atom y)
-				(eq x y))
-			     (and(not(atom x)) (not(atom y))
-			      (equal(car x) (car y))
-			      (equal(cdr x) (cdr y)))))
-
-			   (defun nth(n xs)
-			    (if (zerop n)
-			     (car xs)
-			     (nth(-n 1) (cdr xs))))
-
-			   (defun append(xs y)
-			    (if (null xs)
-			     y(cons(car xs) (append(cdr xs) y))))
-    );
+  (defun append (xs y)
+    (if (null xs)
+        y
+        (cons (car xs) (append (cdr xs) y))))
+);
 
 // MAIN ///////////////////////////////////////////////////////////////////////
 
@@ -1312,13 +1383,14 @@ void runFile(int infd, Object ** env, GC_PARAM)
 	while (peekNext(&stream) != EOF) {
 		*gcObject = nil;
 		*gcObject = readExpr(&stream, GC_ROOTS);
-		evalExpr(gcObject, env, GC_ROOTS);
+		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
+		writeObject(*gcObject, true, &ostream);
+		writeChar('\n', &ostream);  // XXX flush it
 	}
 }
 
 void runREPL(int infd, Object ** env, GC_PARAM)
 {
-	Stream stream = { STREAM_TYPE_FILE,.fd = infd };
 	GC_TRACE(gcObject, nil);
 
 	for (;;) {
@@ -1328,25 +1400,30 @@ void runREPL(int infd, Object ** env, GC_PARAM)
 		for (;;) {
 			*gcObject = nil;
 
-			fputs("tiny> ", stdout);
-			fflush(stdout);
+			writeString("tiny> ", &ostream);
+			fsync(ostream.fd);  /* flush */
 
-			if (peekNext(&stream) == EOF) {
-				fputc('\n', stdout);
+			if (peekNext(&istream) == EOF) {
+				writeChar('\n', &ostream);
 				return;
 			}
 
-			*gcObject = readExpr(&stream, GC_ROOTS);
+			*gcObject = readExpr(&istream, GC_ROOTS);
 			*gcObject = evalExpr(gcObject, env, GC_ROOTS);
 
-			writeObject(*gcObject, true, stdout);
-			fputc('\n', stdout);
+			writeObject(*gcObject, true, &ostream);
+			writeChar('\n', &ostream);
 		}
 	}
 }
 
-/*
-int original_main(int argc, char *argv[]) {
+#define TRY_MAIN
+
+#ifdef TRY_MAIN
+
+/*************************************************************************/
+
+int main(int argc, char *argv[]) {
   int fd = STDIN_FILENO;
 
   if (argc >= 2) {
@@ -1382,9 +1459,10 @@ int original_main(int argc, char *argv[]) {
 
   return EXIT_SUCCESS;
 }
-*/
 
-///////////////////////
+/*************************************************************************/
+
+#else
 
 Object *gcRoots;
 Object temp_root;
@@ -1412,7 +1490,9 @@ void init_lisp()
 void test(char *cmd)
 {
 	int sz = strlen(cmd);
-	Stream stream = { STREAM_TYPE_STRING,.buffer = cmd,.length = sz,.capacity = sz,.offset = 0,.size = 0 };
+	Stream istream = { .type = STREAM_TYPE_STRING, .buffer = cmd, .length = sz, .capacity = sz, .offset = 0, .size = 0 };
+	Stream ostream = { .type = STREAM_TYPE_FILE,. fd = stdout };
+
 	GC_TRACE(gcObject, nil);
 
 	for (;;) {
@@ -1422,25 +1502,26 @@ void test(char *cmd)
 		for (;;) {
 			*gcObject = nil;
 
-			if (peekNext(&stream) == EOF) {
-				fputc('\n', stdout);
+			if (peekNext(&istream) == EOF) {
+				writeChar('\n', &ostream);
 				return;
 			}
 
-			*gcObject = readExpr(&stream, GC_ROOTS);
+			*gcObject = readExpr(&istream, GC_ROOTS);
 			*gcObject = evalExpr(gcObject, the_env, GC_ROOTS);
 
-			writeObject(*gcObject, true, stdout);
-			fputc('\n', stdout);
+			writeObject(*gcObject, true, &ostream);
+			writeChar('\n', &ostream);
 		}
 	}
 }
 
-/*
 int main(int argc, char *argv[])
 {
 	init_lisp();
 	test("(defun sq(x) (* x x)) (sq 27) (sq 4) (sq 9)");
 	return 0;
 }
-*/
+
+#endif
+

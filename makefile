@@ -1,6 +1,8 @@
 CC      = cc
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DNDEBUG
+#CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE
 CFLAGS += -O2 -std=c11 -Wall -pedantic
+#CFLAGS += -O2 -std=c11 -Wall -pedantic -g
 LIBS    = -lncurses
 LD      = cc
 CP      = cp

@@ -713,7 +713,7 @@ keymap_t keymap[] = {
 	{"K_ERROR                  ", NULL, NULL }
 };
 
-int main(int argc, char **argv)
+int yab_main(int argc, char **argv)
 {
 	if (argc != 2) fatal("usage: zep filename\n");
 
