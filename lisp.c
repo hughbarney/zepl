@@ -74,13 +74,13 @@ typedef struct Stream {
 	StreamType type;
 	char *buffer;
 	int fd;
+	char overflow;
 	size_t length, capacity;
 	off_t offset, size;
 } Stream;
 
 Stream istream = { .type = STREAM_TYPE_FILE,.fd = STDIN_FILENO };
 Stream ostream = { .type = STREAM_TYPE_FILE,.fd = STDOUT_FILENO };
-//Stream estream = { .type = STREAM_TYPE_FILE,.fd = STDOUT_FILENO };
 
 typedef struct Memory {
 	size_t capacity, fromOffset, toOffset;
@@ -104,6 +104,42 @@ void exceptionWithObject(Object * object, char *format, ...)
 void writeObject(Object * object, bool readably, Stream *);
 #define WRITE_FMT_BUFSIZ 2048
 
+void writeString(char *str, Stream *stream)
+{
+   int nbytes;
+
+   switch (stream->type) {
+   case STREAM_TYPE_FILE:
+        nbytes = strlen(str);
+        nbytes = write(stream->fd, str, nbytes);
+	return;
+
+    case STREAM_TYPE_STRING:
+    default:		
+	if (stream->overflow) return; /* nothing we can do */
+        nbytes = strlen(str);
+
+	if (nbytes > (stream->capacity - stream->length - 1)) {
+		stream->overflow = 1;
+		nbytes = stream->capacity - stream->length - 1;
+	}
+
+	if (nbytes > 0 ) {	
+		memcpy(stream->buffer + stream->length, str, nbytes);
+		stream->length += nbytes;
+	        stream->buffer[stream->length] = '\0';
+	}
+
+	/* set the end of the buffer to $$ to show there was an overflow */
+	if (stream->overflow) {
+		stream->buffer[stream->length - 2] = '$';
+		stream->buffer[stream->length - 1] = '$';
+		stream->buffer[stream->length] = '\0';
+	}
+	return;
+    }
+}
+
 void writeFmt(Stream *stream, char *fmt, ...)
 {
     static char buf[WRITE_FMT_BUFSIZ];
@@ -119,24 +155,9 @@ void writeFmt(Stream *stream, char *fmt, ...)
 	return;
 
     case STREAM_TYPE_STRING:
-    default:		
-	return;  // nothing for now
-    }
-}
-
-void writeString(char *str, Stream *stream)
-{
-   int nbytes;
-
-   switch (stream->type) {
-   case STREAM_TYPE_FILE:
-        nbytes = strlen(str);
-        nbytes = write(stream->fd, str, nbytes);
+    default:
+	writeString(buf, stream);
 	return;
-
-    case STREAM_TYPE_STRING:
-    default:		
-	return;  // nothing for now
     }
 }
 
@@ -144,16 +165,19 @@ void writeChar(char ch, Stream *stream)
 {
     char str[2];
     int i = 1;
+
+    str[0] = ch;
+    str[1] = '\0';
     
     switch (stream->type) {
     case STREAM_TYPE_FILE:
-	str[0] = ch;
 	i = write(stream->fd, str, i);
 	return;
 
     case STREAM_TYPE_STRING:
     default:		
-	return;  // nothing for now
+	writeString(str, stream);
+	return;
     }
 }
 
@@ -960,6 +984,12 @@ Object *primitiveCons(Object ** args, GC_PARAM)
 	return newCons(gcFirst, gcSecond, GC_ROOTS);
 }
 
+Object *primitiveStringQ(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	return (first != nil && first->type == TYPE_STRING) ? t : nil;
+}
+
 Object *primitivePrint(Object ** args, GC_PARAM)
 {
 	writeChar('\n', &ostream);
@@ -973,6 +1003,8 @@ Object *primitivePrinc(Object ** args, GC_PARAM)
 	writeObject((*args)->car, false, &ostream);
 	return (*args)->car;
 }
+
+
 
 #define DEFINE_PRIMITIVE_ARITHMETIC(name, op, init)                          \
 Object *name(Object **args, GC_PARAM) {                                      \
@@ -1050,6 +1082,7 @@ Primitive primitives[] = {
 	{"car", 1, 1, primitiveCar},
 	{"cdr", 1, 1, primitiveCdr},
 	{"cons", 2, 2, primitiveCons},
+	{"string?", 1, 1, primitiveStringQ},
 	{"print", 1, 1, primitivePrint},
 	{"princ", 1, 1, primitivePrinc},
 	{"+", 0, -1, primitiveAdd},
@@ -1417,7 +1450,7 @@ void runREPL(int infd, Object ** env, GC_PARAM)
 	}
 }
 
-#define TRY_MAIN
+//#define TRY_MAIN
 
 #ifdef TRY_MAIN
 
@@ -1472,6 +1505,12 @@ void init_lisp()
 {
 	gcRoots = nil;
 
+	istream.type = STREAM_TYPE_FILE;
+	istream.fd = STDIN_FILENO;
+
+	ostream.type = STREAM_TYPE_FILE;
+	ostream.fd = STDOUT_FILENO;
+
 	if (setjmp(exceptionEnv) != 0)
 		return;
 
@@ -1487,11 +1526,23 @@ void init_lisp()
 	gcRoots = &temp_root;
 }
 
-void test(char *cmd)
+void call_lisp(char *input, char *output, int o_size)
 {
-	int sz = strlen(cmd);
-	Stream istream = { .type = STREAM_TYPE_STRING, .buffer = cmd, .length = sz, .capacity = sz, .offset = 0, .size = 0 };
-	Stream ostream = { .type = STREAM_TYPE_FILE,. fd = stdout };
+	int i_size = strlen(input);
+
+	istream.type = STREAM_TYPE_STRING;
+	istream.buffer = input;
+	istream.length = i_size;
+	istream.capacity = i_size;
+	istream.offset = 0;
+	istream.size = 0;
+
+	ostream.type = STREAM_TYPE_STRING;
+	ostream.overflow = 0;
+	ostream.capacity = o_size;
+	ostream.length = 0;
+	ostream.buffer = output;
+	ostream.buffer[0] = '\0';
 
 	GC_TRACE(gcObject, nil);
 
@@ -1516,10 +1567,13 @@ void test(char *cmd)
 	}
 }
 
-int main(int argc, char *argv[])
+char out_buf[2048];
+
+int l_main(int argc, char *argv[])
 {
 	init_lisp();
-	test("(defun sq(x) (* x x)) (sq 27) (sq 4) (sq 9)");
+	call_lisp("(defun sq(x) (* x x)) (sq 27) (sq 4) (sq 9)", out_buf, 2048);
+	printf("output:\n%s\n", out_buf);
 	return 0;
 }
 

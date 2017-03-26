@@ -9,19 +9,19 @@ CP      = cp
 MV      = mv
 RM      = rm
 
-OBJ     = yabe.o lisp.o
+OBJ     = zepl.o lisp.o
 
-yabe : $(OBJ)
-	$(LD) -o yabe $(OBJ) $(LIBS)
+zepl : $(OBJ)
+	$(LD) -o zepl $(OBJ) $(LIBS)
 
-yabe.o: yabe.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c yabe.c
+zepl.o: zepl.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c zepl.c
 
 lisp.o: lisp.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c lisp.c
 
 clean:
-	-$(RM) yabe *.o
+	-$(RM) zepl *.o
 
 install:
-	-$(CP) yabe $(HOME)/bin/yabe
+	-$(CP) zepl $(HOME)/bin/zepl

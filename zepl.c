@@ -1,4 +1,4 @@
-/* zep.c,  Zep Emacs, Public Domain, Hugh Barney, 2017, Derived from: Anthony's Editor January 93 */
+/* zepl.c,  Zep Emacs, Public Domain, Hugh Barney, 2017, Derived from: Anthony's Editor January 93 */
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -13,6 +13,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
+
+#define E_NAME          "zepl"
+#define E_VERSION       "v0.1"
+#define E_LABEL         "Zepl:"
 
 #define B_MODIFIED	0x01		/* modified buffer */
 #define MSGLINE         (LINES-1)
@@ -97,7 +101,7 @@ void fatal(char *msg)
 	refresh();
 	endwin();
 	noraw();
-	printf("\nzep: %s\n", msg);
+	printf("\n" E_NAME " " E_VERSION ": %s\n", msg);
 	exit(1);
 }
 
@@ -374,7 +378,7 @@ void modeline(buffer_t *bp)
 	standout();
 	move(bp->w_top + bp->w_rows, 0);
 	mch = ((bp->b_flags & B_MODIFIED) ? '*' : '=');
-	sprintf(temp, "=%c Zep: == %s ", mch, bp->b_fname);
+	sprintf(temp, "=%c " E_LABEL " == %s ", mch, bp->b_fname);
 	addstr(temp);
 
 	for (i = strlen(temp) + 1; i <= COLS; i++)
@@ -569,19 +573,23 @@ void copy_cut(int cut)
 	}
 }
 
-void paste()
+void insert_string(char *str)
 {
-	if (nscrap <= 0) {
-		msg("Nothing to paste.");
-	} else if (nscrap < curbp->b_egap - curbp->b_gap || growgap(curbp, nscrap)) {
+	int len = (str == NULL) ? 0 : strlen(str);
+
+	if (len <= 0) {
+		msg("nothing to insert");
+	} else if (len < curbp->b_egap - curbp->b_gap || growgap(curbp, len)) {
 		curbp->b_point = movegap(curbp, curbp->b_point);
-		memcpy(curbp->b_gap, scrap, nscrap * sizeof (char_t));
-		curbp->b_gap += nscrap;
+		//debug("INS STR: pt=%ld len=%d\n", curbp->b_point, strlen((char *)str));
+		memcpy(curbp->b_gap, str, len * sizeof (char_t));
+		curbp->b_gap += len;
 		curbp->b_point = pos(curbp, curbp->b_egap);
-		curbp->b_flags |= B_MODIFIED;
+		curbp->b_flags &= ~B_MODIFIED;
 	}
 }
 
+void paste() { insert_string((char *)scrap); }
 void copy() { copy_cut(FALSE); }
 void cut() { copy_cut(TRUE); }
 
@@ -676,10 +684,23 @@ void search()
 	}
 }
 
+extern void call_lisp(char *, char *, int);
+char output[4096];
+
+void eval_block()
+{
+	copy_cut(FALSE);
+	output[0] = '\0';
+	call_lisp((char *)scrap, output, 4096);
+	insert_string(output);
+}
+
+
 /* the key bindings:  desc, keys, func */
 keymap_t keymap[] = {
 	{"C-a beginning-of-line    ", "\x01", lnbegin },
 	{"C-b                      ", "\x02", left },
+	{"C-c                      ", "\x03", eval_block },
 	{"C-d forward-delete-char  ", "\x04", delete },
 	{"C-e end-of-line          ", "\x05", lnend },
 	{"C-f                      ", "\x06", right },
@@ -713,10 +734,12 @@ keymap_t keymap[] = {
 	{"K_ERROR                  ", NULL, NULL }
 };
 
-int yab_main(int argc, char **argv)
-{
-	if (argc != 2) fatal("usage: zep filename\n");
+extern void init_lisp(void);
 
+int main(int argc, char **argv)
+{
+	if (argc != 2) fatal("usage: " E_NAME " filename\n");
+	init_lisp();
 	initscr();	
 	raw();
 	noecho();
@@ -739,7 +762,7 @@ int yab_main(int argc, char **argv)
 			(key_return->func)();
 		} else {
 			/* allow TAB and NEWLINE, any other control char is 'Not Bound' */
-			if (*input > 31 || *input == 13 || *input == 9)
+			if (*input > 31 || *input == 10 || *input == 9)
 				insert();
                         else {
 				fflush(stdin);
