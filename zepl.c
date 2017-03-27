@@ -557,10 +557,11 @@ void copy_cut(int cut)
 		p = ptr(curbp, curbp->b_mark);
 		nscrap = curbp->b_point - curbp->b_mark;
 	}
-	if ((scrap = (char_t*) malloc(nscrap)) == NULL) {
+	if ((scrap = (char_t*) malloc(nscrap + 1)) == NULL) {
 		msg("No more memory available.");
 	} else {
 		(void)memcpy(scrap, p, nscrap * sizeof (char_t));
+		*(scrap + nscrap) = '\0';  /* null terminate for insert_string */
 		if (cut) {
 			curbp->b_egap += nscrap; /* if cut expand gap down */
 			curbp->b_point = pos(curbp, curbp->b_egap); /* set point to after region */
@@ -581,7 +582,6 @@ void insert_string(char *str)
 		msg("nothing to insert");
 	} else if (len < curbp->b_egap - curbp->b_gap || growgap(curbp, len)) {
 		curbp->b_point = movegap(curbp, curbp->b_point);
-		//debug("INS STR: pt=%ld len=%d\n", curbp->b_point, strlen((char *)str));
 		memcpy(curbp->b_gap, str, len * sizeof (char_t));
 		curbp->b_gap += len;
 		curbp->b_point = pos(curbp, curbp->b_egap);
@@ -692,6 +692,7 @@ void eval_block()
 	copy_cut(FALSE);
 	output[0] = '\0';
 	call_lisp((char *)scrap, output, 4096);
+	insert_string("\n");
 	insert_string(output);
 }
 
@@ -700,7 +701,6 @@ void eval_block()
 keymap_t keymap[] = {
 	{"C-a beginning-of-line    ", "\x01", lnbegin },
 	{"C-b                      ", "\x02", left },
-	{"C-c                      ", "\x03", eval_block },
 	{"C-d forward-delete-char  ", "\x04", delete },
 	{"C-e end-of-line          ", "\x05", lnend },
 	{"C-f                      ", "\x06", right },
@@ -719,6 +719,7 @@ keymap_t keymap[] = {
 	{"esc w copy-region        ", "\x1B\x77", copy},
 	{"esc < beg-of-buf         ", "\x1B\x3C", top },
 	{"esc > end-of-buf         ", "\x1B\x3E", bottom },
+	{"esc ]                    ", "\x1B\x5D", eval_block },
 	{"up previous-line         ", "\x1B\x5B\x41", up },
 	{"down next-line           ", "\x1B\x5B\x42", down },
 	{"left backward-character  ", "\x1B\x5B\x44", left },
