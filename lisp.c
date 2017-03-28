@@ -11,7 +11,6 @@
 #include <string.h>
 #include <unistd.h>
 
-extern void debug(char *,...);
 
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
@@ -556,7 +555,6 @@ int streamGetc(Stream * stream)
 				stream->length = strlen(stream->buffer);
 				return streamGetc(stream);
 			}
-			debug("EOF!\n");
 			return EOF;
 
 		case STREAM_TYPE_FILE:
@@ -993,6 +991,28 @@ Object *primitiveStringQ(Object ** args, GC_PARAM)
 	return (first != nil && first->type == TYPE_STRING) ? t : nil;
 }
 
+#define DEFINE_EDITOR_FUNC(name) \
+extern void name(); \
+Object *e_##name(Object ** args, GC_PARAM) \
+{ \
+	name(); \
+	return t; \
+}
+
+DEFINE_EDITOR_FUNC(top)
+DEFINE_EDITOR_FUNC(bottom)
+DEFINE_EDITOR_FUNC(left)
+DEFINE_EDITOR_FUNC(right)
+DEFINE_EDITOR_FUNC(up)
+DEFINE_EDITOR_FUNC(down)
+DEFINE_EDITOR_FUNC(lnbegin)
+DEFINE_EDITOR_FUNC(lnend)
+DEFINE_EDITOR_FUNC(paste)
+DEFINE_EDITOR_FUNC(copy)
+DEFINE_EDITOR_FUNC(set_mark)
+DEFINE_EDITOR_FUNC(cut)
+
+
 Object *primitivePrint(Object ** args, GC_PARAM)
 {
 	writeChar('\n', &ostream);
@@ -1085,7 +1105,6 @@ Primitive primitives[] = {
 	{"car", 1, 1, primitiveCar},
 	{"cdr", 1, 1, primitiveCdr},
 	{"cons", 2, 2, primitiveCons},
-	{"string?", 1, 1, primitiveStringQ},
 	{"print", 1, 1, primitivePrint},
 	{"princ", 1, 1, primitivePrinc},
 	{"+", 0, -1, primitiveAdd},
@@ -1096,7 +1115,22 @@ Primitive primitives[] = {
 	{"<", 1, -1, primitiveLess},
 	{"<=", 1, -1, primitiveLessEqual},
 	{">", 1, -1, primitiveGreater},
-	{">=", 1, -1, primitiveGreaterEqual}
+	{">=", 1, -1, primitiveGreaterEqual},
+
+	{"string?", 1, 1, primitiveStringQ},
+
+	{"beginning-of-buffer", 0, 0, e_top},
+	{"end-of-buffer", 0, 0, e_bottom},
+	{"beginning-of-line", 0, 0, e_lnbegin},
+	{"end-of-line", 0, 0, e_lnend},
+	{"forward-char", 0, 0, e_right},
+	{"backward-char", 0, 0, e_left},
+	{"next-line", 0, 0, e_down},
+	{"previous-line", 0, 0, e_up},
+	{"set-mark", 0, 0, e_set_mark},
+	{"copy", 0, 0, e_copy},
+	{"cut", 0, 0, e_cut},
+	{"yank", 0, 0, e_paste}
 };
 
 // Special forms handled by evalExpr. Must be in the same order as above.

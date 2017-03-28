@@ -604,7 +604,7 @@ void insert_string(char *str)
 		memcpy(curbp->b_gap, str, len * sizeof (char_t));
 		curbp->b_gap += len;
 		curbp->b_point = pos(curbp, curbp->b_egap);
-		curbp->b_flags &= ~B_MODIFIED;
+		curbp->b_flags |= B_MODIFIED;
 	}
 }
 
@@ -714,11 +714,17 @@ void eval_block()
 	insert_string(output);
 }
 
+void myfunc()
+{
+	call_lisp("(myfunc)", output, 4096);
+}
+
 
 /* the key bindings:  desc, keys, func */
 keymap_t keymap[] = {
 	{"C-a beginning-of-line    ", "\x01", lnbegin },
 	{"C-b                      ", "\x02", left },
+	{"C-c                      ", "\x03", myfunc },
 	{"C-d forward-delete-char  ", "\x04", delete },
 	{"C-e end-of-line          ", "\x05", lnend },
 	{"C-f                      ", "\x06", right },
