@@ -76,6 +76,25 @@ point_t nscrap = 0;
 char_t *scrap = NULL;
 char searchtext[STRBUF_M];
 
+void debug(char *format, ...)
+{
+	char buffer[256];
+	va_list args;
+	va_start (args, format);
+
+	static FILE *debug_fp = NULL;
+
+	if (debug_fp == NULL) {
+		debug_fp = fopen("debug.out","w");
+	}
+
+	vsprintf (buffer, format, args);
+	va_end(args);
+
+	fprintf(debug_fp,"%s", buffer);
+	fflush(debug_fp);
+}
+
 buffer_t* new_buffer()
 {
 	buffer_t *bp = (buffer_t *)malloc(sizeof(buffer_t));
@@ -690,7 +709,6 @@ char output[4096];
 void eval_block()
 {
 	copy_cut(FALSE);
-	output[0] = '\0';
 	call_lisp((char *)scrap, output, 4096);
 	insert_string("\n");
 	insert_string(output);
@@ -740,7 +758,7 @@ extern void init_lisp(void);
 int main(int argc, char **argv)
 {
 	if (argc != 2) fatal("usage: " E_NAME " filename\n");
-	init_lisp();
+	(void)init_lisp();
 	initscr();	
 	raw();
 	noecho();

@@ -11,6 +11,8 @@
 #include <string.h>
 #include <unistd.h>
 
+extern void debug(char *,...);
+
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
 #endif
@@ -554,7 +556,7 @@ int streamGetc(Stream * stream)
 				stream->length = strlen(stream->buffer);
 				return streamGetc(stream);
 			}
-
+			debug("EOF!\n");
 			return EOF;
 
 		case STREAM_TYPE_FILE:
@@ -759,7 +761,6 @@ Object *readList(Stream * stream, GC_PARAM)
 				exception("unexpected end of stream in dotted list");
 			if ((ch = peekNext(stream)) != ')')
 				exception("unexpected object at end of dotted list");
-
 			readNext(stream);
 			Object *list = reverseList(*gcList);
 			(*gcList)->cdr = *gcLast;
@@ -775,7 +776,9 @@ Object *readList(Stream * stream, GC_PARAM)
 Object *readExpr(Stream * stream, GC_PARAM)
 {
 	for (;;) {
+
 		int ch = readNext(stream);
+
 		if (ch == EOF)
 			return NULL;
 		else if (ch == '\'')
@@ -1497,13 +1500,13 @@ int main(int argc, char *argv[]) {
 
 #else
 
-Object *gcRoots;
+Object *theRoot;
 Object temp_root;
-Object **the_env;
+Object **theEnv;
 
-void init_lisp()
+int init_lisp()
 {
-	gcRoots = nil;
+	theRoot = nil;
 
 	istream.type = STREAM_TYPE_FILE;
 	istream.fd = STDIN_FILENO;
@@ -1511,19 +1514,42 @@ void init_lisp()
 	ostream.type = STREAM_TYPE_FILE;
 	ostream.fd = STDOUT_FILENO;
 
-	if (setjmp(exceptionEnv) != 0)
-		return;
+	if (setjmp(exceptionEnv))
+		return 1;
 
 	symbols = nil;
-	symbols = newCons(&nil, &symbols, gcRoots);
-	symbols = newCons(&t, &symbols, gcRoots);
+	symbols = newCons(&nil, &symbols, theRoot);
+	symbols = newCons(&t, &symbols, theRoot);
 
 	temp_root.type = TYPE_CONS;
-	temp_root.car = newRootEnv(gcRoots);
-	temp_root.cdr = gcRoots;
+	temp_root.car = newRootEnv(theRoot);
+	temp_root.cdr = theRoot;
 
-	the_env = &temp_root.car;
-	gcRoots = &temp_root;
+	theEnv = &temp_root.car;
+	theRoot = &temp_root;
+	return 0;
+}
+
+void call_lisp_body(Object ** env, GC_PARAM)
+{
+	GC_TRACE(gcObject, nil);
+
+	for (;;) {
+		if (setjmp(exceptionEnv))
+			return;
+
+		*gcObject = nil;
+
+		if (peekNext(&istream) == EOF) {
+			writeChar('\n', &ostream);
+			return;
+		}
+
+		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
+		writeObject(*gcObject, true, &ostream);
+		writeChar('\n', &ostream);
+	}
 }
 
 void call_lisp(char *input, char *output, int o_size)
@@ -1544,27 +1570,7 @@ void call_lisp(char *input, char *output, int o_size)
 	ostream.buffer = output;
 	ostream.buffer[0] = '\0';
 
-	GC_TRACE(gcObject, nil);
-
-	for (;;) {
-		if (setjmp(exceptionEnv))
-			continue;
-
-		for (;;) {
-			*gcObject = nil;
-
-			if (peekNext(&istream) == EOF) {
-				writeChar('\n', &ostream);
-				return;
-			}
-
-			*gcObject = readExpr(&istream, GC_ROOTS);
-			*gcObject = evalExpr(gcObject, the_env, GC_ROOTS);
-
-			writeObject(*gcObject, true, &ostream);
-			writeChar('\n', &ostream);
-		}
-	}
+	call_lisp_body(theEnv, theRoot);
 }
 
 char out_buf[2048];
@@ -1572,10 +1578,26 @@ char out_buf[2048];
 int l_main(int argc, char *argv[])
 {
 	init_lisp();
-	call_lisp("(defun sq(x) (* x x)) (sq 27) (sq 4) (sq 9)", out_buf, 2048);
+
+	//call_lisp("(defun sq(x) (* x x)) (sq 9)", out_buf, 2048);
+	//printf("output:\n%s\n", out_buf);
+
+	//call_lisp("(sq 6)", out_buf, 2048);
+	//printf("output:\n%s\n", out_buf);
+
+	call_lisp("(defun fib (n)   (cond ((< n 2) 1)   (t (+ (fib (- n 1)) (fib (- n 2))))))", out_buf, 2048);
 	printf("output:\n%s\n", out_buf);
+
+	call_lisp("(fib 21)", out_buf, 2048);
+	printf("output:\n%s\n", out_buf);
+
+	call_lisp("(fib 23) ", out_buf, 2048);
+	printf("output:\n%s\n", out_buf);
+
+	call_lisp("(fib 25) ", out_buf, 2048);
+	printf("output:\n%s\n", out_buf);
+
 	return 0;
 }
 
 #endif
-
