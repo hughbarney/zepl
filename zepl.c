@@ -27,6 +27,9 @@
 #define MIN_GAP_EXPAND  512
 #define NOMARK          -1
 #define STRBUF_M        64
+#define MAX_KNAME       12
+#define MAX_KBYTES      12
+#define MAX_KFUNC       30
 
 typedef unsigned char char_t;
 typedef long point_t;
@@ -36,6 +39,14 @@ typedef struct keymap_t {
 	char *key_bytes;		/* the string of bytes when this key is pressed */
 	void (*func)(void);
 } keymap_t;
+
+typedef struct keymapp_t {
+	char k_name[MAX_KNAME + 1];       /* name of key eg "c-c c-f" */
+	char k_bytes[MAX_KNAME + 1];      /* bytes of key sequence */
+	char k_funcname[MAX_KFUNC + 1];   /* name of function, eg (forward-char) */
+	void (*k_func)(void);             /* function pointer */
+	struct keymapp_t *k_next;         /* link to next keymapp_t */
+} keymapp_t;
 
 typedef struct buffer_t
 {
@@ -71,6 +82,9 @@ char msgline[TEMPBUF];
 char temp[TEMPBUF];
 keymap_t *key_return;
 keymap_t *key_map;
+keymapp_t *khead = NULL;
+keymapp_t *ktail = NULL;
+
 buffer_t *curbp;
 point_t nscrap = 0;
 char_t *scrap = NULL;
@@ -719,6 +733,152 @@ void myfunc()
 	call_lisp("(myfunc)", output, 4096);
 }
 
+keymapp_t *new_key(char *name, char *bytes)
+{
+	keymapp_t *kp = (keymapp_t *)malloc(sizeof(keymapp_t));
+	assert(kp != NULL);
+
+ 	strncpy(kp->k_name, name, MAX_KNAME);
+	strncpy(kp->k_bytes, bytes, MAX_KBYTES);
+	kp->k_name[MAX_KNAME] ='\0';
+	kp->k_bytes[MAX_KBYTES] ='\0';
+	kp->k_func = NULL;
+	strcpy(kp->k_funcname, "<not bound>");
+	kp->k_next = NULL;
+
+	//debug("new_key: %s\n", name);	
+	return kp;
+}
+
+void dump_keys()
+{
+	keymapp_t *kp;
+
+	for (kp = khead; kp->k_next != NULL; kp = kp->k_next)
+		if (0 != strcmp("<not bound>", kp->k_funcname))
+			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
+
+	for (kp = khead; kp->k_next != NULL; kp = kp->k_next)
+		if (0 == strcmp("<not bound>", kp->k_funcname))
+			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
+
+	fatal("told you\n");
+}
+
+void create_keys()
+{
+	char ch;
+	char ctrx_map[] = "c-x c-|";
+	char ctrl_map[] = "c-|";
+	char esc_map[] = "esc-|";
+	char ctrx_bytes[] = "\x18\x01";
+	char ctrl_bytes[] = "\x01";
+	char esc_bytes[] = "\x1B\x61";
+	keymapp_t *kp;
+
+	assert(khead == NULL);
+	khead = kp = new_key("c-space", "\x00");
+
+	/* control-a to z */
+	for (ch = 1; ch <= 26; ch++) {
+		if (ch == 24) continue;  /* skip ctrl-x */
+		ctrl_map[2] = ch + 96;   /* ASCII a is 97 */
+		ctrl_bytes[0] = ch;
+		ktail = new_key(ctrl_map, ctrl_bytes);
+		kp->k_next = ktail; kp = ktail;
+	}
+
+	/* esc-a to z */
+	for (ch = 1; ch <= 26; ch++) {
+		esc_map[4] = ch + 96;
+		esc_bytes[1] = ch;
+		ktail = new_key(esc_map, esc_bytes);
+		kp->k_next = ktail; kp = ktail;
+	}
+
+	/* control-x control-a to z */
+	for (ch = 1; ch <= 26; ch++) {
+		ctrx_map[6] = ch + 96;
+		ctrx_bytes[1] = ch;
+		ktail = new_key(ctrx_map, ctrx_bytes);
+		kp->k_next = ktail; kp = ktail;
+	}
+}
+
+int set_key_internal(char *name, char *funcname, char *bytes, void (*func)(void))
+{
+	keymapp_t *kp;
+	
+	for (kp = khead; kp->k_next != NULL; kp = kp->k_next) {
+		if (0 == strcmp(kp->k_name, name)) {
+			strncpy(kp->k_funcname, funcname, MAX_KFUNC);
+			kp->k_funcname[MAX_KFUNC] ='\0';
+			kp->k_func = func;
+			return 1;
+		}
+	}
+
+	/* create it and add onto the tail */
+	if (func != NULL) {
+		kp = new_key(name, bytes);
+		strncpy(kp->k_funcname, funcname, MAX_KFUNC);
+		kp->k_funcname[MAX_KFUNC] ='\0';
+		kp->k_func = func;
+		ktail->k_next = kp;
+		ktail = kp;
+		return 1;
+	}
+	return 0;
+}
+
+void set_key(char *name, char *funcname)
+{
+	(void)set_key_internal(name, funcname, "", NULL);
+}
+
+void setup_keys()
+{
+	create_keys();
+	
+        set_key_internal("c-a", "beginning-of-line     ", "\x01", lnbegin);
+	set_key_internal("c-b", "backward-char         ", "\x02", left);
+	set_key_internal("c-c", "myfunc                ", "\x03", myfunc);
+	set_key_internal("c-d", "forward-delete-char   ", "\x04", delete);
+	set_key_internal("c-e", "end-of-line           ", "\x05", lnend);
+	set_key_internal("c-f", "forward-char          ", "\x06", right);
+	set_key_internal("c-n", "next-line             ", "\x0E", down);
+	set_key_internal("c-p", "previous-line         ", "\x10", up);
+	set_key_internal("c-h", "backspace             ", "\x08", backsp);
+	set_key_internal("c-k", "kill-to-eol           ", "\x0B", killtoeol);
+	set_key_internal("c-s", "search                ", "\x13", search);
+	set_key_internal("c-v", "page-down             ", "\x16", pgdown);
+	set_key_internal("c-w", "kill-region           ", "\x17", cut);
+	set_key_internal("c-y", "yank                  ", "\x19", paste);
+
+	set_key_internal("esc-k", "kill-region        ", "\x1B\x6B", cut);
+	set_key_internal("esc-v", "backward-page      ", "\x1B\x76", pgup);
+	set_key_internal("esc-w", "copy-region        ", "\x1B\x77", copy);
+	set_key_internal("esc-<", "beg-of-buf         ", "\x1B\x3C", top);
+	set_key_internal("esc-<", "end-of-buf         ", "\x1B\x3E", bottom);
+	set_key_internal("esc-]", "eval-block         ", "\x1B\x5D", eval_block);
+	set_key_internal("up ",   "previous-line      ", "\x1B\x5B\x41", up);
+	set_key_internal("down",  "next-line          ", "\x1B\x5B\x42", down);
+	set_key_internal("left",  "backward-character ", "\x1B\x5B\x44", left);
+	set_key_internal("right", "forward-character  ", "\x1B\x5B\x43", right);
+
+	set_key_internal("home", "beginning-of-line    ", "\x1B\x4F\x48", lnbegin);
+	set_key_internal("end",  "end-of-line          ", "\x1B\x4F\x46", lnend);
+	set_key_internal("del",  "forward-delete-char  ", "\x1B\x5B\x33\x7E", delete);
+	set_key_internal("backspace","delete-left      ", "\x7f", backsp);
+	set_key_internal("pgup", "page-up              ", "\x1B\x5B\x35\x7E",pgup);
+	set_key_internal("pgdn", "page-down            ", "\x1B\x5B\x36\x7E", pgdown);
+
+	set_key_internal("c-x c-s", "save-buffer       ", "\x18\x13", save);  
+	set_key_internal("c-x c-c", "exit              ", "\x18\x03", quit);
+	set_key_internal("c-space", "set-mark          ", "\x00", set_mark);
+
+	dump_keys();
+}
 
 /* the key bindings:  desc, keys, func */
 keymap_t keymap[] = {
@@ -763,6 +923,7 @@ extern void init_lisp(void);
 
 int main(int argc, char **argv)
 {
+	setup_keys();
 	if (argc != 2) fatal("usage: " E_NAME " filename\n");
 	(void)init_lisp();
 	initscr();	
