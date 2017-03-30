@@ -17,6 +17,7 @@
 #define E_NAME          "zepl"
 #define E_VERSION       "v0.1"
 #define E_LABEL         "Zepl:"
+#define E_NOT_BOUND	"<not bound>"
 
 #define B_MODIFIED	0x01		/* modified buffer */
 #define MSGLINE         (LINES-1)
@@ -35,18 +36,12 @@ typedef unsigned char char_t;
 typedef long point_t;
 
 typedef struct keymap_t {
-	char *key_desc;                 /* name of bound function */
-	char *key_bytes;		/* the string of bytes when this key is pressed */
-	void (*func)(void);
-} keymap_t;
-
-typedef struct keymapp_t {
 	char k_name[MAX_KNAME + 1];       /* name of key eg "c-c c-f" */
 	char k_bytes[MAX_KNAME + 1];      /* bytes of key sequence */
 	char k_funcname[MAX_KFUNC + 1];   /* name of function, eg (forward-char) */
 	void (*k_func)(void);             /* function pointer */
-	struct keymapp_t *k_next;         /* link to next keymapp_t */
-} keymapp_t;
+	struct keymap_t *k_next;         /* link to next keymap_t */
+} keymap_t;
 
 typedef struct buffer_t
 {
@@ -81,9 +76,8 @@ int msgflag;
 char msgline[TEMPBUF];
 char temp[TEMPBUF];
 keymap_t *key_return;
-keymap_t *key_map;
-keymapp_t *khead = NULL;
-keymapp_t *ktail = NULL;
+keymap_t *khead = NULL;
+keymap_t *ktail = NULL;
 
 buffer_t *curbp;
 point_t nscrap = 0;
@@ -299,10 +293,13 @@ char_t *get_key(keymap_t *keys, keymap_t **key_return)
 		*record = '\0';
 
 		/* if recorded bytes match any multi-byte sequence... */
-		for (k = keys, submatch = 0; k->key_bytes != NULL; ++k) {
+		for (k = keys, submatch = 0; k != NULL; k = k->k_next) {
 			char_t *p, *q;
 
-			for (p = buffer, q = (char_t *)k->key_bytes; *p == *q; ++p, ++q) {
+			if (k->k_func == NULL) continue;
+			assert(k->k_bytes != NULL);
+
+			for (p = buffer, q = (char_t *)k->k_bytes; *p == *q; ++p, ++q) {
 			        /* an exact match */
 				if (*q == '\0' && *p == '\0') {
 	    				record = buffer;
@@ -728,41 +725,46 @@ void eval_block()
 	insert_string(output);
 }
 
+void user_func()
+{
+	if (key_return == NULL) return;
+	if (0 == strcmp(key_return->k_funcname, E_NOT_BOUND)) {
+		msg(E_NOT_BOUND);
+		return;
+	}
+}
+
 void myfunc()
 {
 	call_lisp("(myfunc)", output, 4096);
 }
 
-keymapp_t *new_key(char *name, char *bytes)
+keymap_t *new_key(char *name, char *bytes)
 {
-	keymapp_t *kp = (keymapp_t *)malloc(sizeof(keymapp_t));
+	keymap_t *kp = (keymap_t *)malloc(sizeof(keymap_t));
 	assert(kp != NULL);
 
  	strncpy(kp->k_name, name, MAX_KNAME);
 	strncpy(kp->k_bytes, bytes, MAX_KBYTES);
 	kp->k_name[MAX_KNAME] ='\0';
 	kp->k_bytes[MAX_KBYTES] ='\0';
-	kp->k_func = NULL;
-	strcpy(kp->k_funcname, "<not bound>");
+	kp->k_func = user_func;
+	strcpy(kp->k_funcname, E_NOT_BOUND);
 	kp->k_next = NULL;
-
-	//debug("new_key: %s\n", name);	
 	return kp;
 }
 
 void dump_keys()
 {
-	keymapp_t *kp;
+	keymap_t *kp;
 
-	for (kp = khead; kp->k_next != NULL; kp = kp->k_next)
-		if (0 != strcmp("<not bound>", kp->k_funcname))
+	for (kp = khead; kp != NULL; kp = kp->k_next)
+		if (0 != strcmp(E_NOT_BOUND, kp->k_funcname))
 			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
 
-	for (kp = khead; kp->k_next != NULL; kp = kp->k_next)
-		if (0 == strcmp("<not bound>", kp->k_funcname))
+	for (kp = khead; kp != NULL; kp = kp->k_next)
+		if (0 == strcmp(E_NOT_BOUND, kp->k_funcname))
 			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
-
-	fatal("told you\n");
 }
 
 void create_keys()
@@ -774,14 +776,14 @@ void create_keys()
 	char ctrx_bytes[] = "\x18\x01";
 	char ctrl_bytes[] = "\x01";
 	char esc_bytes[] = "\x1B\x61";
-	keymapp_t *kp;
+	keymap_t *kp;
 
 	assert(khead == NULL);
 	khead = kp = new_key("c-space", "\x00");
 
 	/* control-a to z */
 	for (ch = 1; ch <= 26; ch++) {
-		if (ch == 24) continue;  /* skip ctrl-x */
+		if (ch == 9 || ch == 10 || ch == 24) continue;  /* skip tab, linefeed, ctrl-x */
 		ctrl_map[2] = ch + 96;   /* ASCII a is 97 */
 		ctrl_bytes[0] = ch;
 		ktail = new_key(ctrl_map, ctrl_bytes);
@@ -807,7 +809,7 @@ void create_keys()
 
 int set_key_internal(char *name, char *funcname, char *bytes, void (*func)(void))
 {
-	keymapp_t *kp;
+	keymap_t *kp;
 	
 	for (kp = khead; kp->k_next != NULL; kp = kp->k_next) {
 		if (0 == strcmp(kp->k_name, name)) {
@@ -869,9 +871,9 @@ void setup_keys()
 	set_key_internal("home", "beginning-of-line    ", "\x1B\x4F\x48", lnbegin);
 	set_key_internal("end",  "end-of-line          ", "\x1B\x4F\x46", lnend);
 	set_key_internal("del",  "forward-delete-char  ", "\x1B\x5B\x33\x7E", delete);
-	set_key_internal("backspace","delete-left      ", "\x7f", backsp);
 	set_key_internal("pgup", "page-up              ", "\x1B\x5B\x35\x7E",pgup);
 	set_key_internal("pgdn", "page-down            ", "\x1B\x5B\x36\x7E", pgdown);
+	set_key_internal("backspace","delete-left      ", "\x7f", backsp);
 
 	set_key_internal("c-x c-s", "save-buffer       ", "\x18\x13", save);  
 	set_key_internal("c-x c-c", "exit              ", "\x18\x03", quit);
@@ -880,51 +882,13 @@ void setup_keys()
 	dump_keys();
 }
 
-/* the key bindings:  desc, keys, func */
-keymap_t keymap[] = {
-	{"C-a beginning-of-line    ", "\x01", lnbegin },
-	{"C-b                      ", "\x02", left },
-	{"C-c                      ", "\x03", myfunc },
-	{"C-d forward-delete-char  ", "\x04", delete },
-	{"C-e end-of-line          ", "\x05", lnend },
-	{"C-f                      ", "\x06", right },
-	{"C-n                      ", "\x0E", down },
-	{"C-p                      ", "\x10", up },
-	{"C-h backspace            ", "\x08", backsp },
-	{"C-k kill-to-eol          ", "\x0B", killtoeol },
-	{"C-s search               ", "\x13", search },
-	{"C-v                      ", "\x16", pgdown },
-	{"C-w kill-region          ", "\x17", cut},
-	{"C-y yank                 ", "\x19", paste},
-	{"C-space set-mark         ", "\x00", set_mark },
-	{"esc @ set-mark           ", "\x1B\x40", set_mark },
-	{"esc k kill-region        ", "\x1B\x6B", cut },
-	{"esc v                    ", "\x1B\x76", pgup },
-	{"esc w copy-region        ", "\x1B\x77", copy},
-	{"esc < beg-of-buf         ", "\x1B\x3C", top },
-	{"esc > end-of-buf         ", "\x1B\x3E", bottom },
-	{"esc ]                    ", "\x1B\x5D", eval_block },
-	{"up previous-line         ", "\x1B\x5B\x41", up },
-	{"down next-line           ", "\x1B\x5B\x42", down },
-	{"left backward-character  ", "\x1B\x5B\x44", left },
-	{"right forward-character  ", "\x1B\x5B\x43", right },
-	{"home beginning-of-line   ", "\x1B\x4F\x48", lnbegin },
-	{"end end-of-line          ", "\x1B\x4F\x46", lnend },
-	{"DEL forward-delete-char  ", "\x1B\x5B\x33\x7E", delete },
-	{"backspace delete-left    ", "\x7f", backsp },
-	{"PgUp                     ", "\x1B\x5B\x35\x7E",pgup },
-	{"PgDn                     ", "\x1B\x5B\x36\x7E", pgdown },
-	{"C-x C-s save-buffer      ", "\x18\x13", save },  
-	{"C-x C-c exit             ", "\x18\x03", quit },
-	{"K_ERROR                  ", NULL, NULL }
-};
-
 extern void init_lisp(void);
 
 int main(int argc, char **argv)
 {
-	setup_keys();
 	if (argc != 2) fatal("usage: " E_NAME " filename\n");
+
+	setup_keys();
 	(void)init_lisp();
 	initscr();	
 	raw();
@@ -938,21 +902,19 @@ int main(int argc, char **argv)
 
 	if (!growgap(curbp, CHUNK)) fatal("Failed to allocate required memory.\n");
 
-	key_map = keymap;
-
 	while (!done) {
 		display();
-		input = get_key(key_map, &key_return);
+		input = get_key(khead, &key_return);
 
 		if (key_return != NULL) {
-			(key_return->func)();
+			(key_return->k_func)();
 		} else {
 			/* allow TAB and NEWLINE, any other control char is 'Not Bound' */
 			if (*input > 31 || *input == 10 || *input == 9)
 				insert();
                         else {
 				fflush(stdin);
-				msg("Not bound");
+				msg(E_NOT_BOUND);
 			}
 		}
 	}
