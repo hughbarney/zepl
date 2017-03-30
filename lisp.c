@@ -985,11 +985,20 @@ Object *primitiveCons(Object ** args, GC_PARAM)
 	return newCons(gcFirst, gcSecond, GC_ROOTS);
 }
 
-Object *primitiveStringQ(Object ** args, GC_PARAM)
+Object *primitivePrint(Object ** args, GC_PARAM)
 {
-	Object *first = (*args)->car;
-	return (first != nil && first->type == TYPE_STRING) ? t : nil;
+	writeChar('\n', &ostream);
+	writeObject((*args)->car, true, &ostream);
+	writeChar(' ', &ostream);
+	return (*args)->car;
 }
+
+Object *primitivePrinc(Object ** args, GC_PARAM)
+{
+	writeObject((*args)->car, false, &ostream);
+	return (*args)->car;
+}
+
 
 #define DEFINE_EDITOR_FUNC(name) \
 extern void name(); \
@@ -1011,22 +1020,30 @@ DEFINE_EDITOR_FUNC(paste)
 DEFINE_EDITOR_FUNC(copy)
 DEFINE_EDITOR_FUNC(set_mark)
 DEFINE_EDITOR_FUNC(cut)
+DEFINE_EDITOR_FUNC(dump_keys)
 
 
-Object *primitivePrint(Object ** args, GC_PARAM)
+/* set editor key binding */
+extern int set_key(char *, char *);
+
+Object *e_set_key(Object ** args, GC_PARAM)
 {
-	writeChar('\n', &ostream);
-	writeObject((*args)->car, true, &ostream);
-	writeChar(' ', &ostream);
-	return (*args)->car;
+	Object *first = (*args)->car;
+	Object *second = (*args)->cdr->car;
+
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+	if (second->type != TYPE_STRING)
+	    exceptionWithObject(second, "is not a string");
+
+	return (1 == set_key(first->string, second->string) ? t : nil);
 }
 
-Object *primitivePrinc(Object ** args, GC_PARAM)
+Object *primitiveStringQ(Object ** args, GC_PARAM)
 {
-	writeObject((*args)->car, false, &ostream);
-	return (*args)->car;
+	Object *first = (*args)->car;
+	return (first != nil && first->type == TYPE_STRING) ? t : nil;
 }
-
 
 
 #define DEFINE_PRIMITIVE_ARITHMETIC(name, op, init)                          \
@@ -1118,7 +1135,7 @@ Primitive primitives[] = {
 	{">=", 1, -1, primitiveGreaterEqual},
 
 	{"string?", 1, 1, primitiveStringQ},
-
+	{"set-key", 2, 2, e_set_key},
 	{"beginning-of-buffer", 0, 0, e_top},
 	{"end-of-buffer", 0, 0, e_bottom},
 	{"beginning-of-line", 0, 0, e_lnbegin},
@@ -1130,7 +1147,8 @@ Primitive primitives[] = {
 	{"set-mark", 0, 0, e_set_mark},
 	{"copy", 0, 0, e_copy},
 	{"cut", 0, 0, e_cut},
-	{"yank", 0, 0, e_paste}
+	{"yank", 0, 0, e_paste},
+	{"dump-keys", 0, 0, e_dump_keys}
 };
 
 // Special forms handled by evalExpr. Must be in the same order as above.

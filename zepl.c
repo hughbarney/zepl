@@ -727,16 +727,12 @@ void eval_block()
 
 void user_func()
 {
-	if (key_return == NULL) return;
+	assert(key_return != NULL);
 	if (0 == strcmp(key_return->k_funcname, E_NOT_BOUND)) {
 		msg(E_NOT_BOUND);
 		return;
 	}
-}
-
-void myfunc()
-{
-	call_lisp("(myfunc)", output, 4096);
+	call_lisp(key_return->k_funcname, output, 4096);
 }
 
 keymap_t *new_key(char *name, char *bytes)
@@ -793,7 +789,7 @@ void create_keys()
 	/* esc-a to z */
 	for (ch = 1; ch <= 26; ch++) {
 		esc_map[4] = ch + 96;
-		esc_bytes[1] = ch;
+		esc_bytes[1] = ch + 96;
 		ktail = new_key(esc_map, esc_bytes);
 		kp->k_next = ktail; kp = ktail;
 	}
@@ -815,12 +811,13 @@ int set_key_internal(char *name, char *funcname, char *bytes, void (*func)(void)
 		if (0 == strcmp(kp->k_name, name)) {
 			strncpy(kp->k_funcname, funcname, MAX_KFUNC);
 			kp->k_funcname[MAX_KFUNC] ='\0';
-			kp->k_func = func;
+			if (func != NULL)  /* dont set if its a user_func */
+				kp->k_func = func;
 			return 1;
 		}
 	}
 
-	/* create it and add onto the tail */
+	/* not found, create it and add onto the tail */
 	if (func != NULL) {
 		kp = new_key(name, bytes);
 		strncpy(kp->k_funcname, funcname, MAX_KFUNC);
@@ -833,9 +830,9 @@ int set_key_internal(char *name, char *funcname, char *bytes, void (*func)(void)
 	return 0;
 }
 
-void set_key(char *name, char *funcname)
+int set_key(char *name, char *funcname)
 {
-	(void)set_key_internal(name, funcname, "", NULL);
+	return set_key_internal(name, funcname, "", NULL);
 }
 
 void setup_keys()
@@ -844,7 +841,6 @@ void setup_keys()
 	
         set_key_internal("c-a", "beginning-of-line     ", "\x01", lnbegin);
 	set_key_internal("c-b", "backward-char         ", "\x02", left);
-	set_key_internal("c-c", "myfunc                ", "\x03", myfunc);
 	set_key_internal("c-d", "forward-delete-char   ", "\x04", delete);
 	set_key_internal("c-e", "end-of-line           ", "\x05", lnend);
 	set_key_internal("c-f", "forward-char          ", "\x06", right);
