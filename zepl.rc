@@ -14,9 +14,6 @@
   (yank)
   (previous-line))
 
-(set-key "esc-a" "(duplicate_line)")
-
-
 (defun kill-to-eol()
    (cond 
       ((eq "\n" (get-char)) 
@@ -26,4 +23,6 @@
          (end-of-line)
          (kill-region)) ))
 
+(set-key "esc-a" "(duplicate_line)")
 (set-key "c-k" "(kill-to-eol)")
+

@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <curses.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -18,6 +19,7 @@
 #define E_VERSION       "v0.1"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
+#define E_INITFILE      "zepl.rc"
 
 #define B_MODIFIED	0x01		/* modified buffer */
 #define MSGLINE         (LINES-1)
@@ -128,7 +130,7 @@ void fatal(char *msg)
 	refresh();
 	endwin();
 	noraw();
-	printf("\n" E_NAME " " E_VERSION ": %s\n", msg);
+	printf("\n" E_NAME " " E_VERSION ": \n%s\n", msg);
 	exit(1);
 }
 
@@ -709,7 +711,10 @@ void search()
 	}
 }
 
+extern void load_file(int, char *, int);
 extern void call_lisp(char *, char *, int);
+extern void init_lisp(void);
+
 char output[4096];
 
 void eval_block()
@@ -730,6 +735,48 @@ void user_func()
 		return;
 	}
 	call_lisp(key_return->k_funcname, output, 4096);
+}
+
+int load_lisp_file(char *fname)
+{
+	int fd;
+
+	if ((fd = open(fname, O_RDONLY)) == -1) {
+		insert_string("failed to open:\n");
+		insert_string(fname);
+		insert_string("\n");
+		close(fd);
+		return 1;
+	}
+	
+	load_file(fd, output, 4096);
+	close(fd);
+	
+	/* all exceptions start with the word error: */
+	if (NULL != strstr(output, "error:")) {
+		insert_string(output);
+		return 1;
+	}
+
+	return 0; /* success */
+}
+
+void load_config()
+{
+	char buf[300];
+	int fd;
+
+	(void)snprintf(buf, 300, "%s/%s", getenv("HOME"), E_INITFILE);
+
+	if ((fd = open(buf, O_RDONLY)) == -1)
+		fatal("failed to open " E_INITFILE " in HOME directory");
+
+	load_file(fd, output, 4096);
+	close(fd);
+
+	/* all exceptions start with the word error: */
+	if (NULL != strstr(output, "error:"))
+		fatal(output);
 }
 
 keymap_t *new_key(char *name, char *bytes)
@@ -844,7 +891,6 @@ void setup_keys()
 	set_key_internal("c-n", "next-line             ", "\x0E", down);
 	set_key_internal("c-p", "previous-line         ", "\x10", up);
 	set_key_internal("c-h", "backspace             ", "\x08", backsp);
-//	set_key_internal("c-k", "kill-to-eol           ", "\x0B", killtoeol);
 	set_key_internal("c-s", "search                ", "\x13", search);
 	set_key_internal("c-v", "page-down             ", "\x16", pgdown);
 	set_key_internal("c-w", "kill-region           ", "\x17", cut);
@@ -872,10 +918,8 @@ void setup_keys()
 	set_key_internal("c-x c-c", "exit              ", "\x18\x03", quit);
 	set_key_internal("c-space", "set-mark          ", "\x00", set_mark);
 
-	dump_keys();
+	//dump_keys();
 }
-
-extern void init_lisp(void);
 
 int main(int argc, char **argv)
 {
@@ -883,6 +927,7 @@ int main(int argc, char **argv)
 
 	setup_keys();
 	(void)init_lisp();
+	load_config();
 	initscr();	
 	raw();
 	noecho();

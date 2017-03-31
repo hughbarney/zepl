@@ -1028,6 +1028,7 @@ DEFINE_EDITOR_FUNC(delete)
 /* set editor key binding */
 extern int set_key(char *, char *);
 extern char *get_char(void);
+extern int load_lisp_file(char *);
 
 Object *e_get_char(Object **args, GC_PARAM)
 {
@@ -1053,13 +1054,21 @@ Object *primitiveStringQ(Object ** args, GC_PARAM)
 	return (first != nil && first->type == TYPE_STRING) ? t : nil;
 }
 
+Object *e_load(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+
+	return (0 == load_lisp_file(first->string)) ? t : nil;
+}
 
 #define DEFINE_PRIMITIVE_ARITHMETIC(name, op, init)                          \
 Object *name(Object **args, GC_PARAM) {                                      \
   if (*args == nil)                                                          \
     return newNumber(init, GC_ROOTS);                                        \
   else if ((*args)->car->type != TYPE_NUMBER)                                \
-    exceptionWithObject((*args)->car, "is not a number");                    \
+    exceptionWithObject((*args)->car, "is not a number");             \
   else {                                                                     \
     Object *object, *rest;                                                   \
                                                                              \
@@ -1074,7 +1083,7 @@ Object *name(Object **args, GC_PARAM) {                                      \
                                                                              \
     for (; rest != nil; rest = rest->cdr) {                                  \
       if (rest->car->type != TYPE_NUMBER)                                    \
-        exceptionWithObject(rest->car, "is not a number");                   \
+        exceptionWithObject(rest->car, "is not a number");            \
                                                                              \
       object->number = object->number op rest->car->number;                  \
     }                                                                        \
@@ -1090,14 +1099,14 @@ DEFINE_PRIMITIVE_ARITHMETIC(primitiveAdd, +, 0)
 #define DEFINE_PRIMITIVE_RELATIONAL(name, op)                                \
 Object *name(Object **args, GC_PARAM) {                                      \
   if ((*args)->car->type != TYPE_NUMBER)                                     \
-    exceptionWithObject((*args)->car, "is not a number");                    \
+    exceptionWithObject((*args)->car, "is not a number");             \
   else {                                                                     \
     Object *rest = *args;                                                    \
     bool result = true;                                                      \
                                                                              \
     for (; result && rest->cdr != nil; rest = rest->cdr) {                   \
       if (rest->cdr->car->type != TYPE_NUMBER)                               \
-        exceptionWithObject(rest->cdr->car, "is not a number");              \
+        exceptionWithObject(rest->cdr->car, "is not a number");       \
                                                                              \
       result &= rest->car->number op rest->cdr->car->number;                 \
     }                                                                        \
@@ -1143,6 +1152,7 @@ Primitive primitives[] = {
 	{">=", 1, -1, primitiveGreaterEqual},
 
 	{"string?", 1, 1, primitiveStringQ},
+	{"load", 1, 1, e_load},
 	{"set-key", 2, 2, e_set_key},
 	{"get-char", 0, 0, e_get_char},
 	{"beginning-of-buffer", 0, 0, e_top},
@@ -1633,6 +1643,37 @@ void call_lisp(char *input, char *output, int o_size)
 	ostream.buffer[0] = '\0';
 
 	call_lisp_body(theEnv, theRoot);
+}
+
+void load_file_body(Object ** env, GC_PARAM)
+{
+	GC_TRACE(gcObject, nil);
+	
+	if (setjmp(exceptionEnv))
+		return;
+
+	while (peekNext(&istream) != EOF) {
+		*gcObject = nil;
+		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = evalExpr(gcObject, theEnv, GC_ROOTS);
+		writeObject(*gcObject, true, &ostream);
+		writeChar('\n', &ostream);
+	}
+}
+
+void load_file(int infd, char *output, int o_size)
+{
+	istream.type = STREAM_TYPE_FILE;
+	istream.fd = infd;
+
+	ostream.type = STREAM_TYPE_STRING;
+	ostream.overflow = 0;
+	ostream.capacity = o_size;
+	ostream.length = 0;
+	ostream.buffer = output;
+	ostream.buffer[0] = '\0';
+
+	load_file_body(theEnv, theRoot);
 }
 
 char out_buf[2048];
