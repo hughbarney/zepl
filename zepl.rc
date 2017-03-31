@@ -10,7 +10,7 @@
   (set-mark)
   (next-line)
   (beginning-of-line)
-  (copy)
+  (copy-region)
   (yank)
   (previous-line))
 
@@ -27,4 +27,3 @@
          (kill-region)) ))
 
 (set-key "c-k" "(kill-to-eol)")
-
