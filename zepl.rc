@@ -1,0 +1,30 @@
+;;
+;; zepl.rc configuration and macro file for zepl tiny editor
+;;
+
+(defun repeat (n func)  
+  (cond ((> n 0) (func) (repeat (- n 1) func))))
+
+(defun duplicate_line()
+  (beginning-of-line)
+  (set-mark)
+  (next-line)
+  (beginning-of-line)
+  (copy)
+  (yank)
+  (previous-line))
+
+(set-key "esc-a" "(duplicate_line)")
+
+
+(defun kill-to-eol()
+   (cond 
+      ((eq "\n" (get-char)) 
+         (delete))
+      (t 
+         (set-mark)
+         (end-of-line)
+         (kill-region)) ))
+
+(set-key "c-k" "(kill-to-eol)")
+

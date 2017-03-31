@@ -999,6 +999,7 @@ Object *primitivePrinc(Object ** args, GC_PARAM)
 	return (*args)->car;
 }
 
+/************************* Editer Extensions **************************************/
 
 #define DEFINE_EDITOR_FUNC(name) \
 extern void name(); \
@@ -1021,10 +1022,17 @@ DEFINE_EDITOR_FUNC(copy)
 DEFINE_EDITOR_FUNC(set_mark)
 DEFINE_EDITOR_FUNC(cut)
 DEFINE_EDITOR_FUNC(dump_keys)
+DEFINE_EDITOR_FUNC(delete)
 
 
 /* set editor key binding */
 extern int set_key(char *, char *);
+extern char *get_char(void);
+
+Object *e_get_char(Object **args, GC_PARAM)
+{
+	return newStringWithLength(get_char(), 1, GC_ROOTS);
+}
 
 Object *e_set_key(Object ** args, GC_PARAM)
 {
@@ -1136,6 +1144,7 @@ Primitive primitives[] = {
 
 	{"string?", 1, 1, primitiveStringQ},
 	{"set-key", 2, 2, e_set_key},
+	{"get-char", 0, 0, e_get_char},
 	{"beginning-of-buffer", 0, 0, e_top},
 	{"end-of-buffer", 0, 0, e_bottom},
 	{"beginning-of-line", 0, 0, e_lnbegin},
@@ -1145,8 +1154,9 @@ Primitive primitives[] = {
 	{"next-line", 0, 0, e_down},
 	{"previous-line", 0, 0, e_up},
 	{"set-mark", 0, 0, e_set_mark},
-	{"copy", 0, 0, e_copy},
-	{"cut", 0, 0, e_cut},
+	{"delete", 0, 0, e_delete},
+	{"copy-region", 0, 0, e_copy},
+	{"kill-region", 0, 0, e_cut},
 	{"yank", 0, 0, e_paste},
 	{"dump-keys", 0, 0, e_dump_keys}
 };

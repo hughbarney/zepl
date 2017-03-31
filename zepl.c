@@ -623,16 +623,11 @@ void paste() { insert_string((char *)scrap); }
 void copy() { copy_cut(FALSE); }
 void cut() { copy_cut(TRUE); }
 
-void killtoeol()
+char *get_char()
 {
-	/* point = start of empty line or last char in file */
-	if (*(ptr(curbp, curbp->b_point)) == 0xa || (curbp->b_point + 1 == ((curbp->b_ebuf - curbp->b_buf) - (curbp->b_egap - curbp->b_gap))) ) {
-		delete();
-	} else {
-		curbp->b_mark = curbp->b_point;
-		lnend();
-		copy_cut(TRUE);
-	}
+	static char ch[2] = "\0\0";
+	ch[0] = (char)*(ptr(curbp, curbp->b_point));
+	return ch;
 }
 
 point_t search_forward(buffer_t *bp, point_t start_p, char *stext)
@@ -720,6 +715,8 @@ char output[4096];
 void eval_block()
 {
 	copy_cut(FALSE);
+	assert(scrap != NULL);
+	assert(strlen(scrap) > 0);
 	call_lisp((char *)scrap, output, 4096);
 	insert_string("\n");
 	insert_string(output);
@@ -847,7 +844,7 @@ void setup_keys()
 	set_key_internal("c-n", "next-line             ", "\x0E", down);
 	set_key_internal("c-p", "previous-line         ", "\x10", up);
 	set_key_internal("c-h", "backspace             ", "\x08", backsp);
-	set_key_internal("c-k", "kill-to-eol           ", "\x0B", killtoeol);
+//	set_key_internal("c-k", "kill-to-eol           ", "\x0B", killtoeol);
 	set_key_internal("c-s", "search                ", "\x13", search);
 	set_key_internal("c-v", "page-down             ", "\x16", pgdown);
 	set_key_internal("c-w", "kill-region           ", "\x17", cut);
