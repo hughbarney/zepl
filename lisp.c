@@ -37,29 +37,14 @@ struct Object {
 	Type type;
 	size_t size;
 	union {
-		struct {
-			double number;
-		};		// number
-		struct {
-			char string[sizeof(Object *[3])];
-		};		// string, symbol
-		struct {
-			Object *car, *cdr;
-		};		// cons
-		struct {
-			Object *params, *body, *env;
-		};		// lambda, macro
-		struct {
-			int primitive;
-			char *name;
-		};		// primitive
-		struct {
-			Object *parent, *vars, *vals;
-		};		// env
-		struct {
-			Object *forward;
-		};		// forwarding pointer
-	};
+		struct { double number; };                      // number
+		struct { char string[sizeof (Object *[3])]; };  // string, symbol
+		struct { Object *car, *cdr; };                  // cons
+		struct { Object *params, *body, *env; };        // lambda, macro
+		struct { int primitive; char *name; };          // primitive
+		struct { Object *parent, *vars, *vals; };       // env
+		struct { Object *forward; };                    // forwarding pointer
+  };
 };
 
 static Object *symbols = NULL;
@@ -95,7 +80,6 @@ static jmp_buf exceptionEnv;
 // EXCEPTION HANDLING /////////////////////////////////////////////////////////
 
 #define exception(...)       exceptionWithObject(NULL, __VA_ARGS__)
-//void exceptionWithObject(Object *, char *, ...);
 
 #ifdef __GNUC__
 void exceptionWithObject(Object * object, char *format, ...)
