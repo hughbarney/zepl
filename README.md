@@ -241,9 +241,9 @@ This results in the output buffer being reset.
 
 To resolve this issue I need to rewite the Stream code in lisp.c so that the buffer is allocated
 from memory.  Also so that a new instance of output stream is created for the load as well as for the
-call_lisp().   The call_lisp() function will then me invoked as follows:
+call_lisp().   The call_lisp() function will then be invoked as follows:
 
-      jjjjj
+      char *output = call_lisp(input);
 
 
 ## Copying

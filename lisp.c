@@ -1028,29 +1028,23 @@ Object *e_get_key(Object **args, GC_PARAM) { return newString(get_input_key(), G
 Object *e_get_key_name(Object **args, GC_PARAM) { return newString(get_key_name(), GC_ROOTS); }
 Object *e_get_key_funcname(Object **args, GC_PARAM) { return newString(get_key_funcname(), GC_ROOTS); }
 
+#define TWO_STRING_ARGS()                                    \
+	Object *first = (*args)->car;                        \
+	Object *second = (*args)->cdr->car;                  \
+	if (first->type != TYPE_STRING)                      \
+	    exceptionWithObject(first, "is not a string");   \
+	if (second->type != TYPE_STRING)                     \
+	    exceptionWithObject(second, "is not a string");  
+
 Object *e_set_key(Object ** args, GC_PARAM)
 {
-	Object *first = (*args)->car;
-	Object *second = (*args)->cdr->car;
-
-	if (first->type != TYPE_STRING)
-	    exceptionWithObject(first, "is not a string");
-	if (second->type != TYPE_STRING)
-	    exceptionWithObject(second, "is not a string");
-
+	TWO_STRING_ARGS();
 	return (1 == set_key(first->string, second->string) ? t : nil);
 }
 
 Object *e_prompt(Object ** args, GC_PARAM)
 {
-	Object *first = (*args)->car;
-	Object *second = (*args)->cdr->car;
-
-	if (first->type != TYPE_STRING)
-	    exceptionWithObject(first, "is not a string");
-	if (second->type != TYPE_STRING)
-	    exceptionWithObject(second, "is not a string");
-
+	TWO_STRING_ARGS();
 	display_prompt_and_response(first->string, second->string);
 	return t;
 }
