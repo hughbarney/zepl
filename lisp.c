@@ -1493,7 +1493,7 @@ void runFile(int infd, Object ** env, GC_PARAM)
 		*gcObject = readExpr(&stream, GC_ROOTS);
 		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
 		writeObject(*gcObject, true, &ostream);
-		writeChar('\n', &ostream);  // XXX flush it
+		writeChar('\n', &ostream);
 	}
 }
 
@@ -1525,8 +1525,124 @@ void runREPL(int infd, Object ** env, GC_PARAM)
 	}
 }
 
-//#define TRY_MAIN
+Object *theRoot;
+Object temp_root;
+Object **theEnv;
 
+void set_stream_file(Stream *stream, int fd)
+{
+	stream->type = STREAM_TYPE_FILE;
+	stream->fd = fd;
+}
+
+void set_input_stream_buffer(Stream *stream, char *buffer)
+{
+	stream->type = STREAM_TYPE_STRING;
+	stream->buffer = buffer;
+	stream->length = strlen(buffer);
+	stream->capacity = strlen(buffer);
+	stream->offset = 0;
+	stream->size = 0;
+}
+
+void set_output_stream_buffer(Stream *stream, char *buffer, int o_size)
+{
+	stream->type = STREAM_TYPE_STRING;
+	stream->overflow = 0;
+	stream->capacity = o_size;
+	stream->length = 0;
+	stream->buffer = buffer;
+	stream->buffer[0] = '\0';
+}
+
+void load_file_body(Object ** env, GC_PARAM)
+{
+	GC_TRACE(gcObject, nil);
+	
+	if (setjmp(exceptionEnv))
+		return;
+
+	while (peekNext(&istream) != EOF) {
+		*gcObject = nil;
+		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = evalExpr(gcObject, theEnv, GC_ROOTS);
+		writeObject(*gcObject, true, &ostream);
+		writeChar('\n', &ostream);
+	}
+}
+
+void call_lisp_body(Object ** env, GC_PARAM)
+{
+	GC_TRACE(gcObject, nil);
+
+	for (;;) {
+		if (setjmp(exceptionEnv))
+			return;
+
+		*gcObject = nil;
+
+		if (peekNext(&istream) == EOF) {
+			writeChar('\n', &ostream);
+			return;
+		}
+
+		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
+		writeObject(*gcObject, true, &ostream);
+		writeChar('\n', &ostream);
+	}
+}
+
+/*
+ * Three interface functions that allow this tiny-lisp to be 
+ * embedded in another application.
+ *
+ * int init_lisp()
+ * void call_lisp(char *input, char *output, int o_size)
+ * void load_file(int infd, char *output, int o_size)
+ *
+ */
+
+int init_lisp()
+{
+	theRoot = nil;
+
+	set_stream_file(&istream, STDIN_FILENO);
+	set_stream_file(&ostream, STDOUT_FILENO);
+
+	if (setjmp(exceptionEnv))
+		return 1;
+
+	symbols = nil;
+	symbols = newCons(&nil, &symbols, theRoot);
+	symbols = newCons(&t, &symbols, theRoot);
+
+	temp_root.type = TYPE_CONS;
+	temp_root.car = newRootEnv(theRoot);
+	temp_root.cdr = theRoot;
+
+	theEnv = &temp_root.car;
+	theRoot = &temp_root;
+	return 0;
+}
+
+void call_lisp(char *input, char *output, int o_size)
+{
+	set_input_stream_buffer(&istream, input);
+	set_output_stream_buffer(&ostream, output, o_size);
+	call_lisp_body(theEnv, theRoot);
+}
+
+void load_file(int infd, char *output, int o_size)
+{
+	set_stream_file(&istream, infd);
+	set_output_stream_buffer(&ostream, output, o_size);
+	load_file_body(theEnv, theRoot);
+}
+
+
+/* define TRY_MAIN if we want to test this stand alone */
+//#define TRY_MAIN
 #ifdef TRY_MAIN
 
 /*************************************************************************/
@@ -1569,138 +1685,5 @@ int main(int argc, char *argv[]) {
 }
 
 /*************************************************************************/
-
-#else
-
-Object *theRoot;
-Object temp_root;
-Object **theEnv;
-
-int init_lisp()
-{
-	theRoot = nil;
-
-	istream.type = STREAM_TYPE_FILE;
-	istream.fd = STDIN_FILENO;
-
-	ostream.type = STREAM_TYPE_FILE;
-	ostream.fd = STDOUT_FILENO;
-
-	if (setjmp(exceptionEnv))
-		return 1;
-
-	symbols = nil;
-	symbols = newCons(&nil, &symbols, theRoot);
-	symbols = newCons(&t, &symbols, theRoot);
-
-	temp_root.type = TYPE_CONS;
-	temp_root.car = newRootEnv(theRoot);
-	temp_root.cdr = theRoot;
-
-	theEnv = &temp_root.car;
-	theRoot = &temp_root;
-	return 0;
-}
-
-void call_lisp_body(Object ** env, GC_PARAM)
-{
-	GC_TRACE(gcObject, nil);
-
-	for (;;) {
-		if (setjmp(exceptionEnv))
-			return;
-
-		*gcObject = nil;
-
-		if (peekNext(&istream) == EOF) {
-			writeChar('\n', &ostream);
-			return;
-		}
-
-		*gcObject = readExpr(&istream, GC_ROOTS);
-		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
-		writeObject(*gcObject, true, &ostream);
-		writeChar('\n', &ostream);
-	}
-}
-
-void call_lisp(char *input, char *output, int o_size)
-{
-	int i_size = strlen(input);
-
-	istream.type = STREAM_TYPE_STRING;
-	istream.buffer = input;
-	istream.length = i_size;
-	istream.capacity = i_size;
-	istream.offset = 0;
-	istream.size = 0;
-
-	ostream.type = STREAM_TYPE_STRING;
-	ostream.overflow = 0;
-	ostream.capacity = o_size;
-	ostream.length = 0;
-	ostream.buffer = output;
-	ostream.buffer[0] = '\0';
-
-	call_lisp_body(theEnv, theRoot);
-}
-
-void load_file_body(Object ** env, GC_PARAM)
-{
-	GC_TRACE(gcObject, nil);
-	
-	if (setjmp(exceptionEnv))
-		return;
-
-	while (peekNext(&istream) != EOF) {
-		*gcObject = nil;
-		*gcObject = readExpr(&istream, GC_ROOTS);
-		*gcObject = evalExpr(gcObject, theEnv, GC_ROOTS);
-		writeObject(*gcObject, true, &ostream);
-		writeChar('\n', &ostream);
-	}
-}
-
-void load_file(int infd, char *output, int o_size)
-{
-	istream.type = STREAM_TYPE_FILE;
-	istream.fd = infd;
-
-	ostream.type = STREAM_TYPE_STRING;
-	ostream.overflow = 0;
-	ostream.capacity = o_size;
-	ostream.length = 0;
-	ostream.buffer = output;
-	ostream.buffer[0] = '\0';
-
-	load_file_body(theEnv, theRoot);
-}
-
-char out_buf[2048];
-
-int l_main(int argc, char *argv[])
-{
-	init_lisp();
-
-	//call_lisp("(defun sq(x) (* x x)) (sq 9)", out_buf, 2048);
-	//printf("output:\n%s\n", out_buf);
-
-	//call_lisp("(sq 6)", out_buf, 2048);
-	//printf("output:\n%s\n", out_buf);
-
-	call_lisp("(defun fib (n)   (cond ((< n 2) 1)   (t (+ (fib (- n 1)) (fib (- n 2))))))", out_buf, 2048);
-	printf("output:\n%s\n", out_buf);
-
-	call_lisp("(fib 21)", out_buf, 2048);
-	printf("output:\n%s\n", out_buf);
-
-	call_lisp("(fib 23) ", out_buf, 2048);
-	printf("output:\n%s\n", out_buf);
-
-	call_lisp("(fib 25) ", out_buf, 2048);
-	printf("output:\n%s\n", out_buf);
-
-	return 0;
-}
-
 #endif
+
