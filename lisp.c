@@ -1,5 +1,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1001,23 +1002,31 @@ DEFINE_EDITOR_FUNC(up)
 DEFINE_EDITOR_FUNC(down)
 DEFINE_EDITOR_FUNC(lnbegin)
 DEFINE_EDITOR_FUNC(lnend)
-DEFINE_EDITOR_FUNC(paste)
-DEFINE_EDITOR_FUNC(copy)
+DEFINE_EDITOR_FUNC(yank)
+DEFINE_EDITOR_FUNC(copy_region)
 DEFINE_EDITOR_FUNC(set_mark)
-DEFINE_EDITOR_FUNC(cut)
-DEFINE_EDITOR_FUNC(dump_keys)
+DEFINE_EDITOR_FUNC(kill_region)
 DEFINE_EDITOR_FUNC(delete)
+DEFINE_EDITOR_FUNC(backspace)
+DEFINE_EDITOR_FUNC(pgdown)
+DEFINE_EDITOR_FUNC(pgup)
+DEFINE_EDITOR_FUNC(save_buffer)
+DEFINE_EDITOR_FUNC(quit)
 
 
-/* set editor key binding */
 extern int set_key(char *, char *);
 extern char *get_char(void);
+extern char *get_input_key(void);
+extern char *get_key_name(void);
+extern char *get_key_funcname(void);
+extern void display_prompt_and_response(char *, char *);
 extern int load_lisp_file(char *);
+extern void msg(char *,...);
 
-Object *e_get_char(Object **args, GC_PARAM)
-{
-	return newStringWithLength(get_char(), 1, GC_ROOTS);
-}
+Object *e_get_char(Object **args, GC_PARAM) { return newStringWithLength(get_char(), 1, GC_ROOTS); }
+Object *e_get_key(Object **args, GC_PARAM) { return newString(get_input_key(), GC_ROOTS); }
+Object *e_get_key_name(Object **args, GC_PARAM) { return newString(get_key_name(), GC_ROOTS); }
+Object *e_get_key_funcname(Object **args, GC_PARAM) { return newString(get_key_funcname(), GC_ROOTS); }
 
 Object *e_set_key(Object ** args, GC_PARAM)
 {
@@ -1030,6 +1039,20 @@ Object *e_set_key(Object ** args, GC_PARAM)
 	    exceptionWithObject(second, "is not a string");
 
 	return (1 == set_key(first->string, second->string) ? t : nil);
+}
+
+Object *e_prompt(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	Object *second = (*args)->cdr->car;
+
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+	if (second->type != TYPE_STRING)
+	    exceptionWithObject(second, "is not a string");
+
+	display_prompt_and_response(first->string, second->string);
+	return t;
 }
 
 Object *primitiveStringQ(Object ** args, GC_PARAM)
@@ -1045,6 +1068,15 @@ Object *e_load(Object ** args, GC_PARAM)
 	    exceptionWithObject(first, "is not a string");
 
 	return (0 == load_lisp_file(first->string)) ? t : nil;
+}
+
+Object *e_message(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+	msg(first->string);
+	return t;
 }
 
 #define DEFINE_PRIMITIVE_ARITHMETIC(name, op, init)                          \
@@ -1137,8 +1169,14 @@ Primitive primitives[] = {
 
 	{"string?", 1, 1, primitiveStringQ},
 	{"load", 1, 1, e_load},
+	{"message", 1, 1, e_message},
 	{"set-key", 2, 2, e_set_key},
+	{"prompt", 2, 2, e_prompt},	
 	{"get-char", 0, 0, e_get_char},
+	{"get-key", 0, 0, e_get_key},
+	{"get-key-name", 0, 0, e_get_key_name},
+	{"get-key-funcname", 0, 0, e_get_key_funcname},
+
 	{"beginning-of-buffer", 0, 0, e_top},
 	{"end-of-buffer", 0, 0, e_bottom},
 	{"beginning-of-line", 0, 0, e_lnbegin},
@@ -1149,10 +1187,14 @@ Primitive primitives[] = {
 	{"previous-line", 0, 0, e_up},
 	{"set-mark", 0, 0, e_set_mark},
 	{"delete", 0, 0, e_delete},
-	{"copy-region", 0, 0, e_copy},
-	{"kill-region", 0, 0, e_cut},
-	{"yank", 0, 0, e_paste},
-	{"dump-keys", 0, 0, e_dump_keys}
+	{"copy-region", 0, 0, e_copy_region},
+	{"kill-region", 0, 0, e_kill_region},
+	{"yank", 0, 0, e_yank},
+	{"backspace", 0, 0, e_backspace},
+	{"page-down", 0, 0, e_pgdown},
+	{"page-up", 0, 0, e_pgup},
+	{"save-buffer", 0, 0, e_save_buffer},
+	{"exit", 0, 0, e_quit}
 };
 
 // Special forms handled by evalExpr. Must be in the same order as above.
@@ -1612,6 +1654,8 @@ int init_lisp()
 
 void call_lisp(char *input, char *output, int o_size)
 {
+	assert(input != NULL);
+	assert(output != NULL);
 	set_input_stream_buffer(&istream, input);
 	set_output_stream_buffer(&ostream, output, o_size);
 	call_lisp_body(theEnv, theRoot);
@@ -1619,6 +1663,7 @@ void call_lisp(char *input, char *output, int o_size)
 
 void load_file(int infd, char *output, int o_size)
 {
+	assert(output != NULL);
 	set_stream_file(&istream, infd);
 	set_output_stream_buffer(&ostream, output, o_size);
 	load_file_body(theEnv, theRoot);

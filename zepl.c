@@ -86,25 +86,6 @@ point_t nscrap = 0;
 char_t *scrap = NULL;
 char searchtext[STRBUF_M];
 
-void debug(char *format, ...)
-{
-	char buffer[256];
-	va_list args;
-	va_start (args, format);
-
-	static FILE *debug_fp = NULL;
-
-	if (debug_fp == NULL) {
-		debug_fp = fopen("debug.out","w");
-	}
-
-	vsprintf (buffer, format, args);
-	va_end(args);
-
-	fprintf(debug_fp,"%s", buffer);
-	fflush(debug_fp);
-}
-
 buffer_t* new_buffer()
 {
 	buffer_t *bp = (buffer_t *)malloc(sizeof(buffer_t));
@@ -222,7 +203,7 @@ point_t movegap(buffer_t *bp, point_t offset)
 	return (pos(bp, bp->b_egap));
 }
 
-void save()
+void save_buffer()
 {
 	FILE *fp;
 	point_t length;
@@ -502,6 +483,13 @@ void display()
 	refresh();
 }
 
+void display_prompt_and_response(char *prompt, char *response)
+{
+	mvaddstr(MSGLINE, 0, prompt);
+	addstr(response);
+	clrtoeol();
+}
+
 void top() { curbp->b_point = 0; }
 void bottom() {	curbp->b_epage = curbp->b_point = pos(curbp, curbp->b_ebuf); }
 void left() { if (0 < curbp->b_point) --curbp->b_point; }
@@ -544,7 +532,7 @@ void insert()
 	curbp->b_flags |= B_MODIFIED;
 }
 
-void backsp()
+void backspace()
 {
 	curbp->b_point = movegap(curbp, curbp->b_point);
 	if (curbp->b_buf < curbp->b_gap) {
@@ -569,7 +557,7 @@ void set_mark()
 	msg("Mark set");
 }
 
-void copy_cut(int cut)
+void copy_cut(int cut, int verbose)
 {
 	char_t *p;
 	/* if no mark or point == marker, nothing doing */
@@ -598,9 +586,9 @@ void copy_cut(int cut)
 			curbp->b_egap += nscrap; /* if cut expand gap down */
 			curbp->b_point = pos(curbp, curbp->b_egap); /* set point to after region */
 			curbp->b_flags |= B_MODIFIED;
-			msg("%ld bytes cut.", nscrap);
+			if (verbose) msg("%ld bytes cut.", nscrap);
 		} else {
-			msg("%ld bytes copied.", nscrap);
+			if (verbose) msg("%ld bytes copied.", nscrap);
 		}
 		curbp->b_mark = NOMARK;  /* unmark */
 	}
@@ -621,16 +609,26 @@ void insert_string(char *str)
 	}
 }
 
-void paste() { insert_string((char *)scrap); }
-void copy() { copy_cut(FALSE); }
-void cut() { copy_cut(TRUE); }
+void yank() { insert_string((char *)scrap); }
+void copy_region() { copy_cut(FALSE, TRUE); }
+void kill_region() { copy_cut(TRUE, TRUE); }
 
+/* return char at current point */
 char *get_char()
 {
 	static char ch[2] = "\0\0";
 	ch[0] = (char)*(ptr(curbp, curbp->b_point));
 	return ch;
 }
+
+/* wrapper to simplify call and dependancies in the interface code */
+char *get_input_key() {	return (char *)get_key(khead, &key_return); }
+
+/* the name of the bound function of this key */
+char *get_key_funcname() { return (key_return != NULL ? key_return->k_funcname : ""); }
+
+/* the name of the last key */
+char *get_key_name() { return (key_return != NULL ? key_return->k_name : ""); }
 
 point_t search_forward(buffer_t *bp, point_t start_p, char *stext)
 {
@@ -719,7 +717,7 @@ char output[4096];
 
 void eval_block()
 {
-	copy_cut(FALSE);
+	copy_cut(FALSE, FALSE);
 	assert(scrap != NULL);
 	assert(strlen(scrap) > 0);
 	call_lisp((char *)scrap, output, 4096);
@@ -740,7 +738,6 @@ void user_func()
 int load_lisp_file(char *fname)
 {
 	int fd;
-
 	if ((fd = open(fname, O_RDONLY)) == -1) {
 		insert_string("failed to open:\n");
 		insert_string(fname);
@@ -794,17 +791,12 @@ keymap_t *new_key(char *name, char *bytes)
 	return kp;
 }
 
-void dump_keys()
+/* note, no check if name already exists */
+void make_key(char *name, char *bytes)
 {
-	keymap_t *kp;
-
-	for (kp = khead; kp != NULL; kp = kp->k_next)
-		if (0 != strcmp(E_NOT_BOUND, kp->k_funcname))
-			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
-
-	for (kp = khead; kp != NULL; kp = kp->k_next)
-		if (0 == strcmp(E_NOT_BOUND, kp->k_funcname))
-			debug("%s\t\t%s\n", kp->k_name, kp->k_funcname);
+	keymap_t *kp = new_key(name, bytes);
+	ktail->k_next = kp;
+	ktail = kp;
 }
 
 void create_keys()
@@ -816,35 +808,33 @@ void create_keys()
 	char ctrx_bytes[] = "\x18\x01";
 	char ctrl_bytes[] = "\x01";
 	char esc_bytes[] = "\x1B\x61";
-	keymap_t *kp;
 
 	assert(khead == NULL);
-	khead = kp = new_key("c-space", "\x00");
+	khead = ktail = new_key("c-space", "\x00");
 
 	/* control-a to z */
 	for (ch = 1; ch <= 26; ch++) {
 		if (ch == 9 || ch == 10 || ch == 24) continue;  /* skip tab, linefeed, ctrl-x */
 		ctrl_map[2] = ch + 96;   /* ASCII a is 97 */
 		ctrl_bytes[0] = ch;
-		ktail = new_key(ctrl_map, ctrl_bytes);
-		kp->k_next = ktail; kp = ktail;
+		make_key(ctrl_map, ctrl_bytes);
 	}
 
 	/* esc-a to z */
 	for (ch = 1; ch <= 26; ch++) {
 		esc_map[4] = ch + 96;
 		esc_bytes[1] = ch + 96;
-		ktail = new_key(esc_map, esc_bytes);
-		kp->k_next = ktail; kp = ktail;
+		make_key(esc_map, esc_bytes);
 	}
 
 	/* control-x control-a to z */
 	for (ch = 1; ch <= 26; ch++) {
 		ctrx_map[6] = ch + 96;
 		ctrx_bytes[1] = ch;
-		ktail = new_key(ctrx_map, ctrx_bytes);
-		kp->k_next = ktail; kp = ktail;
+		make_key(ctrx_map, ctrx_bytes);
 	}
+
+	make_key("c-x ?", "\x18\x3F");
 }
 
 int set_key_internal(char *name, char *funcname, char *bytes, void (*func)(void))
@@ -883,42 +873,37 @@ void setup_keys()
 {
 	create_keys();
 	
-        set_key_internal("c-a", "beginning-of-line     ", "\x01", lnbegin);
-	set_key_internal("c-b", "backward-char         ", "\x02", left);
-	set_key_internal("c-d", "forward-delete-char   ", "\x04", delete);
-	set_key_internal("c-e", "end-of-line           ", "\x05", lnend);
-	set_key_internal("c-f", "forward-char          ", "\x06", right);
-	set_key_internal("c-n", "next-line             ", "\x0E", down);
-	set_key_internal("c-p", "previous-line         ", "\x10", up);
-	set_key_internal("c-h", "backspace             ", "\x08", backsp);
-	set_key_internal("c-s", "search                ", "\x13", search);
-	set_key_internal("c-v", "page-down             ", "\x16", pgdown);
-	set_key_internal("c-w", "kill-region           ", "\x17", cut);
-	set_key_internal("c-y", "yank                  ", "\x19", paste);
-
-	set_key_internal("esc-k", "kill-region        ", "\x1B\x6B", cut);
-	set_key_internal("esc-v", "backward-page      ", "\x1B\x76", pgup);
-	set_key_internal("esc-w", "copy-region        ", "\x1B\x77", copy);
-	set_key_internal("esc-<", "beg-of-buf         ", "\x1B\x3C", top);
-	set_key_internal("esc-<", "end-of-buf         ", "\x1B\x3E", bottom);
-	set_key_internal("esc-]", "eval-block         ", "\x1B\x5D", eval_block);
-	set_key_internal("up ",   "previous-line      ", "\x1B\x5B\x41", up);
-	set_key_internal("down",  "next-line          ", "\x1B\x5B\x42", down);
-	set_key_internal("left",  "backward-character ", "\x1B\x5B\x44", left);
-	set_key_internal("right", "forward-character  ", "\x1B\x5B\x43", right);
-
-	set_key_internal("home", "beginning-of-line    ", "\x1B\x4F\x48", lnbegin);
-	set_key_internal("end",  "end-of-line          ", "\x1B\x4F\x46", lnend);
-	set_key_internal("del",  "forward-delete-char  ", "\x1B\x5B\x33\x7E", delete);
-	set_key_internal("pgup", "page-up              ", "\x1B\x5B\x35\x7E",pgup);
-	set_key_internal("pgdn", "page-down            ", "\x1B\x5B\x36\x7E", pgdown);
-	set_key_internal("backspace","delete-left      ", "\x7f", backsp);
-
-	set_key_internal("c-x c-s", "save-buffer       ", "\x18\x13", save);  
-	set_key_internal("c-x c-c", "exit              ", "\x18\x03", quit);
-	set_key_internal("c-space", "set-mark          ", "\x00", set_mark);
-
-	//dump_keys();
+        set_key_internal("c-a",     "(beginning-of-line)",   "\x01", lnbegin);
+	set_key_internal("c-b",     "(backward-char)",       "\x02", left);
+	set_key_internal("c-d",     "(delete)",              "\x04", delete);
+	set_key_internal("c-e",     "(end-of-line)",         "\x05", lnend);
+	set_key_internal("c-f",     "(forward-char)",        "\x06", right);
+	set_key_internal("c-n",     "(next-line)",           "\x0E", down);
+	set_key_internal("c-p",     "(previous-line)",       "\x10", up);
+	set_key_internal("c-h",     "(backspace)",           "\x08", backspace);
+	set_key_internal("c-s",     "(search)",              "\x13", search);
+	set_key_internal("c-v",     "(page-down)",           "\x16", pgdown);
+	set_key_internal("c-w",     "(kill-region)",         "\x17", kill_region);
+	set_key_internal("c-y",     "(yank)",                "\x19", yank);
+	set_key_internal("esc-k",   "(kill-region)",         "\x1B\x6B", kill_region);
+	set_key_internal("esc-v",   "(page-up)",             "\x1B\x76", pgup);
+	set_key_internal("esc-w",   "(copy-region)",         "\x1B\x77", copy_region);
+	set_key_internal("esc-<",   "(beginning-of-buffer)", "\x1B\x3C", top);
+	set_key_internal("esc-<",   "(end-of-bufffer)",      "\x1B\x3E", bottom);
+	set_key_internal("esc-]",   "(eval-block)",          "\x1B\x5D", eval_block);
+	set_key_internal("up ",     "(previous-line)",       "\x1B\x5B\x41", up);
+	set_key_internal("down",    "(next-line)",           "\x1B\x5B\x42", down);
+	set_key_internal("left",    "(backward-character)",  "\x1B\x5B\x44", left);
+	set_key_internal("right",   "(forward-character)",   "\x1B\x5B\x43", right);
+	set_key_internal("home",    "(beginning-of-line)",   "\x1B\x4F\x48", lnbegin);
+	set_key_internal("end",     "(end-of-line)",         "\x1B\x4F\x46", lnend);
+	set_key_internal("del",     "(delete)",              "\x1B\x5B\x33\x7E", delete);
+	set_key_internal("pgup",    "(page-up)",             "\x1B\x5B\x35\x7E",pgup);
+	set_key_internal("pgdn",    "(page-down)",           "\x1B\x5B\x36\x7E", pgdown);
+	set_key_internal("backspace","(backspace)",          "\x7f", backspace);
+	set_key_internal("c-x c-s", "(save-buffer)",         "\x18\x13", save_buffer);  
+	set_key_internal("c-x c-c", "(exit)",                "\x18\x03", quit);
+	set_key_internal("c-space", "(set-mark)",            "\x00", set_mark);
 }
 
 int main(int argc, char **argv)
