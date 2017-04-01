@@ -240,9 +240,11 @@ But is now the following lisp code in the configuration file.
 
 ## Interface to Lisp Interpretter
 
-In order to be able to easily embed a Misp interpretter into an application a small set of interface functions are required.
+In order to be able to easily embed a Lisp interpretter into an application a small set of interface functions are required.
 
-     void init_lisp();                               ## this setup up the lisp environment
+     void init_lisp();                               ## this setup up the lisp environment, that subsequent calls to
+	                                                 ## call_lisp() and load_file() will use and where the state will be
+													 ## persisted between calls.
 
      char *output = call_lisp(char *input);          ## this passes a string to the lisp interpretter and captures
 	                                                 ## the resulting output in char *output.
