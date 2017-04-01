@@ -2,6 +2,10 @@
 
 A tiny Emacs Editor core with a tiny lisp extention language in less than 2500 lines of C.
 
+
+![zepl screenshot](/screenshots/Screenshot 2017-04-01 at 18.25.03.png?raw=true)
+
+
 Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension language was derived from Tiny-Lisp[7].
 
 > A designer knows he has achieved perfection not when there is nothing left to add, but when there is nothing left to take away.
