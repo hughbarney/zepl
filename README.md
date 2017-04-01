@@ -2,7 +2,7 @@
 
 A tiny Emacs Editor core with a tiny lisp extention language in less than 2500 lines of C.
 
-Zepl is a Zep[x] based editor with a lisp extension language. The lisp extension language was derived from Tiny-Lisp[x].
+Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension language was derived from Tiny-Lisp[7].
 
 > A designer knows he has achieved perfection not when there is nothing left to add, but when there is nothing left to take away.
 > -- <cite>Antoine de Saint-Exupery</cite>
@@ -229,7 +229,18 @@ But is now the following lisp code in the configuration file.
              (kill-region)) ))
     
     (set-key "c-k" "(kill-to-eol)")
-    
+
+## Known Issues
+
+when evaluating load("lisp.lsp") in the buffer a recursive call gets setup between call_lisp(), load().
+This results in the output buffer being reset.
+
+To resolve this issue I need to rewite the Stream code in lisp.c so that the buffer is allocated
+from memory.  Also so that a new instance of output stream is created for the load as well as for the
+call_lisp().   The call_lisp() function will then me invoked as follows:
+
+      jjjjj
+
 
 ## Copying
   Zep is released to the public domain.
@@ -242,8 +253,5 @@ But is now the following lisp code in the configuration file.
     [4] Jonathan Payne, Buffer-Gap: http://ned.rubyforge.org/doc/buffer-gap.txt
     [5] Anthony Howe,  http://ned.rubyforge.org/doc/editor-101.txt
     [6] Anthony Howe, http://ned.rubyforge.org/doc/editor-102.txt
-
-
-
-
-
+    [7] Tiny-Lisp,  https://github.com/matp/tiny-lisp
+    [8] Zep, https://github.com/hughbarney/zep
