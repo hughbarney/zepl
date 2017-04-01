@@ -2,7 +2,7 @@
 
 A tiny Emacs Editor core with a tiny lisp extention language in less than 2500 lines of C.
 
-Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension language was derived from Tiny-Lisp[7].
+Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension language was derived from Tiny-Lisp[7] by Matthias Pirstitz.
 
 
 ![zepl screenshot](https://github.com/hughbarney/zepl/blob/master/screenshots/Screenshot%202017-04-01%20at%2018.25.03.png)
@@ -11,7 +11,7 @@ Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension
 > A designer knows he has achieved perfection not when there is nothing left to add, but when there is nothing left to take away.
 > -- <cite>Antoine de Saint-Exupery</cite>
 
-## Goals of Zep Emacs
+## Goals of Zepl Emacs
 
 * Provide just enough editing features to be able to make small changes to files
 * Consist of a Tiny Editor core with as much of the editor as possible being implemented in lisp extensions
@@ -22,7 +22,7 @@ Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension
 Zepl is based on the Zep editor with a Read-Evaluate-Print-Loop (REPL).
 Hence Zepl is a pun on Repl.
 
-## Starting Zep
+## Starting Zepl
 
 Zepl can only open one file at a time.  The filename to edit must be specified on the command line.
 
@@ -201,7 +201,9 @@ The example shows how the editor can be extended.
 	(get-char)                              # return the character at the current position in the file
 	(get-key)                               # wait for a key press, return the key or "" if the key was a command key
 	(get-key-name)                          # return the name of the key pressed eg: c-k for control-k.
+	                                          only valid immediatley after a call to (get-key)
 	(get-key-funcname)                      # return the name of the function bound to the key
+	                                          only valid immediatley after a call to (get-key)
 
 
 ## Swapping C code with Lisp
@@ -234,9 +236,26 @@ But is now the following lisp code in the configuration file.
     
     (set-key "c-k" "(kill-to-eol)")
 
+## Lisp Functions needed for future enhancements
+
+    (string.ref string n)                 ;; return character (as a string) at position n in the string
+    (string.substring string n1 n2        ;; return a substring of string from ref n1 to n2
+    (string.append string1 string2)       ;; return a new string of string1 concatenated with string2
+	(number->string n)                    ;; return a string representation of number n
+	(string->number s)                    ;; return a number converted from the string, eg "99" -> 99
+
+## Future Editor Features
+
+    (goto-line n)                         ;; prompt for a line number, convert the string to a number
+	                                      ;; go to beginning of buffer, move down n-1 lines
+
+    Make Zepl handle multiple files       ;; this is fairly easy to do as I have 3 other editors that
+	                                      ;; implement this in about 120 lines.
+
+
 ## Known Issues
 
-when evaluating load("lisp.lsp") in the buffer a recursive call gets setup between call_lisp(), load().
+when evaluating load("lisp.lsp") in the buffer a recursive call gets setup between call_lisp(), load_file().
 This results in the output buffer being reset.
 
 To resolve this issue I need to rewite the Stream code in lisp.c so that the buffer is allocated
@@ -247,7 +266,7 @@ call_lisp().   The call_lisp() function will then be invoked as follows:
 
 
 ## Copying
-  Zep is released to the public domain.
+  Zepl is released to the public domain.
   hughbarney AT gmail.com 2017
 
 ## References
