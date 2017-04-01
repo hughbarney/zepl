@@ -1,5 +1,13 @@
 ;;
-;; zepl.rc configuration and macro file for zepl tiny editor
+;; ZEPL a tiny Emacs editor core with a tiny lisp extension language
+;; hughbarney AT googlemail.com
+;;
+;; The editor provides only basic buffer movement and edit functions
+;; everything else is done by extending the user interface using the
+;; lisp extension language. Functions can be bound to keys using set-key.
+;; For example: (set-key "c-k" "(kill-to-eol)")
+;; 
+;; place zepl.rc in your home direcory and it is run when zepl starts up.
 ;;
 
 (defun repeat (n func)  
@@ -15,14 +23,26 @@
   (previous-line))
 
 (defun kill-to-eol()
-   (cond 
-      ((eq "\n" (get-char)) 
-         (delete))
-      (t 
-         (set-mark)
-         (end-of-line)
-         (kill-region)) ))
+  (cond 
+    ((eq "\n" (get-char)) 
+       (delete))
+    (t 
+       (set-mark)
+       (end-of-line)
+       (kill-region)) ))
+
+;;
+;; prompt for a keystroke then show its name
+;; (once we have string.append we can display both name and funcname in the message
+;;
+(defun describe-key()
+  (prompt "Describe Key: " "")
+  (setq key (get-key))
+  (cond
+    ((not (eq key "")) (message key))
+    (t (message (get-key-name)))))
+
 
 (set-key "esc-a" "(duplicate_line)")
 (set-key "c-k" "(kill-to-eol)")
-
+(set-key "c-x ?" "(describe-key)")
