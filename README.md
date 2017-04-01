@@ -13,6 +13,7 @@ Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension
 
 ## Goals of Zepl Emacs
 
+* Provide a reference implementation to a standard way to embed a lisp interpretter to an application
 * Provide just enough editing features to be able to make small changes to files
 * Consist of a Tiny Editor core with as much of the editor as possible being implemented in lisp extensions
 * Provide a tiny experimental platform for playing around with Lisp
@@ -235,6 +236,23 @@ But is now the following lisp code in the configuration file.
              (kill-region)) ))
     
     (set-key "c-k" "(kill-to-eol)")
+
+
+## Interface to Lisp Interpretter
+
+In order to be able to easily embed a Misp interpretter into an application a small set of interface functions are required.
+
+     void init_lisp();                               ## this setup up the lisp environment
+
+     char *output = call_lisp(char *input);          ## this passes a string to the lisp interpretter and captures
+	                                                 ## the resulting output in char *output.
+													 ## The advantage of this approach is that the application can retrieve
+													 ## any size output from the interpretter and not worry about allocating
+													 ## a buffer
+
+     char *output = load_file(char *filename);       ## this opens and passes the contents of the file to the lisp interpretter
+     
+
 
 ## Lisp Functions needed for future enhancements
 
