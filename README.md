@@ -91,11 +91,11 @@ Type a lisp function into the editor.
 
 for example:
 
-   1: --------------
-   2: (defun factorial (n)
-   3:   (cond ((= n 0) 1)
-   4:     (t (* n (factorial (- n 1))))))
-   5:--------------
+    1: --------------
+    2: (defun factorial (n)
+    3:   (cond ((= n 0) 1)
+    4:     (t (* n (factorial (- n 1))))))
+    5:--------------
 
 Place the cursor at the beginning of line 1 and set a mark (hit control-spacebar).
 
@@ -103,19 +103,68 @@ Now move the cursot to line 5 and evaluate the block of code (hit escape followe
 
 Zepl will pass the code to lisp for it to be evaluated.
  
-   <Lambda (n)>
+    <Lambda (n)>
 
 Now call factorial in the same way (mark the start of the code, move to the end of the code and hit escape-])
 
-  (factorial 6)
+    (factorial 6)
 
-  720
+    720
 
 ## zepl.rc file
 
 The sample zepl.rc file should be placed into your HOME directory
 The example shows how the editor can be extended.
 
+    ;;
+    ;; ZEPL a tiny Emacs editor core with a tiny lisp extension language
+    ;; hughbarney AT googlemail.com
+    ;;
+    ;; The editor provides only basic buffer movement and edit functions
+    ;; everything else is done by extending the user interface using the
+    ;; lisp extension language. Functions can be bound to keys using set-key.
+    ;; For example: (set-key "c-k" "(kill-to-eol)")
+    ;; 
+    ;; place zepl.rc in your home direcory and it is run when zepl starts up.
+    ;;
+    
+    (defun repeat (n func)  
+      (cond ((> n 0) (func) (repeat (- n 1) func))))
+    
+    (defun duplicate_line()
+      (beginning-of-line)
+      (set-mark)
+      (next-line)
+      (beginning-of-line)
+      (copy-region)
+      (yank)
+      (previous-line))
+    
+    (defun kill-to-eol()
+      (cond 
+        ((eq "\n" (get-char)) 
+           (delete))
+        (t 
+           (set-mark)
+           (end-of-line)
+           (kill-region)) ))
+    
+    ;;
+    ;; prompt for a keystroke then show its name
+    ;; (once we have string.append we can display both name and funcname in the message
+    ;;
+    (defun describe-key()
+      (prompt "Describe Key: " "")
+      (setq key (get-key))
+      (cond
+        ((not (eq key "")) (message key))
+        (t (message (get-key-name)))))
+    
+    
+    (set-key "esc-a" "(duplicate_line)")
+    (set-key "c-k" "(kill-to-eol)")
+    (set-key "c-x ?" "(describe-key)")
+    
 
 ## Build in Editor functions that can be called through lisp.
 
