@@ -1055,6 +1055,12 @@ Object *primitiveStringQ(Object ** args, GC_PARAM)
 	return (first != nil && first->type == TYPE_STRING) ? t : nil;
 }
 
+Object *primitiveNumberQ(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	return (first != nil && first->type == TYPE_NUMBER) ? t : nil;
+}
+
 Object *e_load(Object ** args, GC_PARAM)
 {
 	Object *first = (*args)->car;
@@ -1162,6 +1168,7 @@ Primitive primitives[] = {
 	{">=", 1, -1, primitiveGreaterEqual},
 
 	{"string?", 1, 1, primitiveStringQ},
+	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},
 	{"set-key", 2, 2, e_set_key},
