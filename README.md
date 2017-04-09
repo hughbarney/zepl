@@ -121,6 +121,7 @@ Now call factorial in the same way (mark the start of the code, move to the end 
 The sample zepl.rc file should be placed into your HOME directory
 The example shows how the editor can be extended.
 
+```lisp
     ;;
     ;; ZEPL a tiny Emacs editor core with a tiny lisp extension language
     ;; hughbarney AT googlemail.com
@@ -169,7 +170,7 @@ The example shows how the editor can be extended.
     (set-key "esc-a" "(duplicate_line)")
     (set-key "c-k" "(kill-to-eol)")
     (set-key "c-x ?" "(describe-key)")
-    
+```
 
 ## Build in Editor functions that can be called through lisp.
 
@@ -226,6 +227,7 @@ A good exmaple of this was the function to kill to the end of line. This was ori
 
 But is now the following lisp code in the configuration file.
 
+```lisp
     (defun kill-to-eol()
        (cond 
           ((eq "\n" (get-char)) 
@@ -236,7 +238,7 @@ But is now the following lisp code in the configuration file.
              (kill-region)) ))
     
     (set-key "c-k" "(kill-to-eol)")
-
+```
 
 ## Interface to Lisp Interpretter
 
