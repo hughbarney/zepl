@@ -213,6 +213,7 @@ The example shows how the editor can be extended.
 The intension is to enable as much as possible to be implemented in lisp rather than C code.
 A good exmaple of this was the function to kill to the end of line. This was originally implemented as:
    
+```c
     void killtoeol()
     {
     	/* point = start of empty line or last char in file */
@@ -224,6 +225,7 @@ A good exmaple of this was the function to kill to the end of line. This was ori
     		copy_cut(TRUE);
     	}
     }
+```
 
 But is now the following lisp code in the configuration file.
 
@@ -244,27 +246,29 @@ But is now the following lisp code in the configuration file.
 
 In order to be able to easily embed a Lisp interpretter into an application a small set of interface functions are required.
 
-     void init_lisp();                               ## this setup up the lisp environment, that subsequent calls to
-	                                                 ## call_lisp() and load_file() will use and where the state will be
-													 ## persisted between calls.
+```c
+     void init_lisp();                               /* setup up the lisp environment, that subsequent calls to */
+	                                             /* call_lisp() and load_file() will use and where the state */
+						     /* will be persisted between calls. */
 
-     char *output = call_lisp(char *input);          ## this passes a string to the lisp interpretter and captures
-	                                                 ## the resulting output in char *output.
-													 ## The advantage of this approach is that the application can retrieve
-													 ## any size output from the interpretter and not worry about allocating
-													 ## a buffer
+     char *output = call_lisp(char *input);          /* passes a string to the lisp interpretter and captures   */
+	                                             /* the resulting output in char *output. */
+						     /* The advantage of this approach is that the application can */
+						     /* retrieve any size output from the interpretter and not worry */
+						     /* about allocating a buffer */
 
-     char *output = load_file(char *filename);       ## this opens and passes the contents of the file to the lisp interpretter
-     
-
+     char *output = load_file(char *filename);      /* opens and passes the contents file to the lisp interpretter */
+```
 
 ## Lisp Functions needed for future enhancements
 
+```lisp
     (string.ref string n)                 ;; return character (as a string) at position n in the string
     (string.substring string n1 n2        ;; return a substring of string from ref n1 to n2
     (string.append string1 string2)       ;; return a new string of string1 concatenated with string2
 	(number->string n)                    ;; return a string representation of number n
 	(string->number s)                    ;; return a number converted from the string, eg "99" -> 99
+```
 
 ## Future Editor Features
 
@@ -284,8 +288,9 @@ To resolve this issue I need to rewite the Stream code in lisp.c so that the buf
 from memory.  Also so that a new instance of output stream is created for the load as well as for the
 call_lisp().   The call_lisp() function will then be invoked as follows:
 
+```c
       char *output = call_lisp(input);
-
+```
 
 ## Copying
   Zepl is released to the public domain.
