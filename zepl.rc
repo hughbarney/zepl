@@ -22,14 +22,15 @@
   (yank)
   (previous-line))
 
+;; second example that uses if and progn
 (defun kill-to-eol()
-  (cond 
-    ((eq "\n" (get-char)) 
-       (delete))
-    (t 
-       (set-mark)
-       (end-of-line)
-       (kill-region)) ))
+  (if (eq "\n" (get-char))
+    (progn
+      (delete))
+    (progn
+      (set-mark)
+      (end-of-line)
+      (kill-region))))
 
 ;;
 ;; prompt for a keystroke then show its name
@@ -40,7 +41,7 @@
   (setq key (get-key))
   (cond
     ((not (eq key "")) (message key))
-    (t (message (get-key-name)))))
+    (t (message (get-key-funcname)))))
 
 
 (set-key "esc-a" "(duplicate_line)")

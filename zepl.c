@@ -16,7 +16,7 @@
 #include <termios.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.1"
+#define E_VERSION       "v0.2"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -109,8 +109,8 @@ void fatal(char *msg)
 {
 	move(LINES-1, 0);
 	refresh();
-	endwin();
 	noraw();
+	endwin();
 	printf("\n" E_NAME " " E_VERSION ": \n%s\n", msg);
 	exit(1);
 }
