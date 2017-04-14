@@ -1,22 +1,17 @@
 /* zepl.c,  Zep Emacs, Public Domain, Hugh Barney, 2017, Derived from: Anthony's Editor January 93 */
 
 #include <stdlib.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <curses.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/ioctl.h>
 #include <ctype.h>
-#include <limits.h>
 #include <string.h>
 #include <unistd.h>
-#include <termios.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.3"
+#define E_VERSION       "v0.4"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
