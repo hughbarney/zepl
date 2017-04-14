@@ -12,6 +12,8 @@
 #include <string.h>
 #include <unistd.h>
 
+extern void debug(char *, ...);
+
 
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
@@ -1007,7 +1009,6 @@ extern char *get_input_key(void);
 extern char *get_key_name(void);
 extern char *get_key_funcname(void);
 extern void display_prompt_and_response(char *, char *);
-extern int load_lisp_file(char *);
 extern void msg(char *,...);
 
 Object *e_get_char(Object **args, GC_PARAM) { return newStringWithLength(get_char(), 1, GC_ROOTS); }
@@ -1048,13 +1049,30 @@ Object *primitiveNumberQ(Object ** args, GC_PARAM)
 	return (first != nil && first->type == TYPE_NUMBER) ? t : nil;
 }
 
+char *load_file(int);
+
 Object *e_load(Object ** args, GC_PARAM)
 {
+	int fd;
+	char ebuf[81];
 	Object *first = (*args)->car;
 	if (first->type != TYPE_STRING)
 	    exceptionWithObject(first, "is not a string");
 
-	return (0 == load_lisp_file(first->string)) ? t : nil;
+	debug("load_file: %s\n", first->string);
+
+	if ((fd = open(first->string, O_RDONLY)) == -1) {
+		snprintf(ebuf, 80, "failed to open %s", first->string);
+		ebuf[80] ='\0';
+		writeString(ebuf, &ostream);
+		close(fd);
+		return nil;
+	}
+
+	debug("e_load() fd=%d\n", fd);	
+	load_file(fd); // XXX maybe recursive ?
+	close(fd);
+	return t;
 }
 
 Object *e_message(Object ** args, GC_PARAM)
@@ -1494,63 +1512,25 @@ Object *newRootEnv(GC_PARAM)
 	return *gcEnv;
 }
 
-void runFile(int infd, Object ** env, GC_PARAM)
-{
-	Stream stream = { STREAM_TYPE_FILE,.fd = infd };
-	GC_TRACE(gcObject, nil);
-
-	if (setjmp(exceptionEnv))
-		return;
-
-	while (peekNext(&stream) != EOF) {
-		*gcObject = nil;
-		*gcObject = readExpr(&stream, GC_ROOTS);
-		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
-		writeObject(*gcObject, true, &ostream);
-		writeChar('\n', &ostream);
-	}
-}
-
-void runREPL(int infd, Object ** env, GC_PARAM)
-{
-	GC_TRACE(gcObject, nil);
-
-	for (;;) {
-		if (setjmp(exceptionEnv))
-			continue;
-
-		for (;;) {
-			*gcObject = nil;
-
-			writeString("tiny> ", &ostream);
-			fsync(ostream.fd);  /* flush */
-
-			if (peekNext(&istream) == EOF) {
-				writeChar('\n', &ostream);
-				return;
-			}
-
-			*gcObject = readExpr(&istream, GC_ROOTS);
-			*gcObject = evalExpr(gcObject, env, GC_ROOTS);
-
-			writeObject(*gcObject, true, &ostream);
-			writeChar('\n', &ostream);
-		}
-	}
-}
-
 Object *theRoot;
 Object temp_root;
 Object **theEnv;
 
 void set_stream_file(Stream *stream, int fd)
 {
+	debug("set_stream_file %d\n", fd);
 	stream->type = STREAM_TYPE_FILE;
 	stream->fd = fd;
+	//stream->offset = 0;
+	//stream->size = 0;
 }
 
 void set_input_stream_buffer(Stream *stream, char *buffer)
 {
+	assert(stream != NULL);
+	assert(buffer != NULL);
+	assert(strlen(buffer) > 0);
+
 	stream->type = STREAM_TYPE_STRING;
 	stream->buffer = buffer;
 	stream->length = strlen(buffer);
@@ -1570,23 +1550,24 @@ void reset_output_stream()
 	}
 }
 
-void load_file_body(Object ** env, GC_PARAM)
+void load_file_body(Object ** env, GC_PARAM, Stream *input_stream)
 {
+	debug("load_file_body\n");
 	GC_TRACE(gcObject, nil);
-	
+
 	if (setjmp(exceptionEnv))
 		return;
 
-	while (peekNext(&istream) != EOF) {
+	while (peekNext(input_stream) != EOF) {
 		*gcObject = nil;
-		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = readExpr(input_stream, GC_ROOTS);
 		*gcObject = evalExpr(gcObject, theEnv, GC_ROOTS);
 		writeObject(*gcObject, true, &ostream);
 		writeChar('\n', &ostream);
 	}
 }
 
-void call_lisp_body(Object ** env, GC_PARAM)
+void call_lisp_body(Object ** env, GC_PARAM, Stream *input_stream)
 {
 	GC_TRACE(gcObject, nil);
 
@@ -1596,12 +1577,12 @@ void call_lisp_body(Object ** env, GC_PARAM)
 
 		*gcObject = nil;
 
-		if (peekNext(&istream) == EOF) {
+		if (peekNext(input_stream) == EOF) {
 			writeChar('\n', &ostream);
 			return;
 		}
 
-		*gcObject = readExpr(&istream, GC_ROOTS);
+		*gcObject = readExpr(input_stream, GC_ROOTS);
 		*gcObject = evalExpr(gcObject, env, GC_ROOTS);
 		writeObject(*gcObject, true, &ostream);
 		writeChar('\n', &ostream);
@@ -1644,63 +1625,24 @@ int init_lisp()
 char *call_lisp(char *input)
 {
 	assert(input != NULL);
-	set_input_stream_buffer(&istream, input);
-	call_lisp_body(theEnv, theRoot);
+	Stream is = { STREAM_TYPE_STRING };
+
+	debug("call_lisp()\n");
+	//set_input_stream_buffer(&istream, input);
+	set_input_stream_buffer(&is, input);
+	//call_lisp_body(theEnv, theRoot, &istream);
+	call_lisp_body(theEnv, theRoot, &is);
+	debug("call_lisp() done\n");
 	return ostream.buffer;
 }
 
 char *load_file(int infd)
 {
-	assert(output != NULL);
-	set_stream_file(&istream, infd);
-	load_file_body(theEnv, theRoot);
+	debug("load_file fd=%d\n", infd);
+	Stream input_stream = { STREAM_TYPE_FILE, .fd = -1 };
+	set_stream_file(&input_stream, infd);
+	debug("load_file stream fd=%d\n", input_stream.fd);
+	debug("load_file stream type=%d\n", input_stream.type);
+	load_file_body(theEnv, theRoot, &input_stream);
 	return ostream.buffer;
 }
-
-
-/* define TRY_MAIN if we want to test this stand alone */
-//#define TRY_MAIN
-#ifdef TRY_MAIN
-
-/*************************************************************************/
-
-int main(int argc, char *argv[]) {
-  int fd = STDIN_FILENO;
-
-  if (argc >= 2) {
-    if (argc > 2 || !strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
-      fprintf(stderr, "usage: %s [file]\n", argv[0]);
-      return (argc > 2) ? EXIT_FAILURE : EXIT_SUCCESS;
-    } else if (argv[1][0] == '-') {
-      fprintf(stderr, "%s: unrecognized option, `%s'\n", argv[0], argv[1]);
-      return EXIT_FAILURE;
-    } else {
-      if ((fd = open(argv[1], O_RDONLY)) == -1) {
-        fprintf(stderr, "%s: open() failed, %s\n", argv[0], strerror(errno));
-        return EXIT_FAILURE;
-      }
-    }
-  }
-
-  GC_PARAM = nil;
-
-  if (setjmp(exceptionEnv))
-    return EXIT_FAILURE;
-
-  symbols = nil;
-  symbols = newCons(&nil, &symbols, GC_ROOTS);
-  symbols = newCons(&t, &symbols, GC_ROOTS);
-
-  GC_TRACE(gcEnv, newRootEnv(GC_ROOTS));
-
-  if (isatty(fd))
-    runREPL(fd, gcEnv, GC_ROOTS);
-  else
-    runFile(fd, gcEnv, GC_ROOTS);
-
-  return EXIT_SUCCESS;
-}
-
-/*************************************************************************/
-#endif
-

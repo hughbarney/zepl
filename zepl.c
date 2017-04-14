@@ -85,7 +85,6 @@ buffer_t* new_buffer()
 {
 	buffer_t *bp = (buffer_t *)malloc(sizeof(buffer_t));
 	assert(bp != NULL);
-
 	bp->b_point = 0;
 	bp->b_page = 0;
 	bp->b_epage = 0;
@@ -713,6 +712,7 @@ extern void reset_output_stream();
 
 void eval_block()
 {
+	debug("START: eval_block\n");
 	char *output;
 	copy_cut(FALSE, FALSE);
 	assert(scrap != NULL);
@@ -723,6 +723,7 @@ void eval_block()
 	insert_string("\n");
 	insert_string(output);
 	reset_output_stream();
+	debug("STOP: eval_block\n");
 }
 
 void user_func()
@@ -747,35 +748,12 @@ void user_func()
 	reset_output_stream();
 }
 
-/* move this to lisp */
-int load_lisp_file(char *fname)
-{
-	int fd;
-	char *output;
-	if ((fd = open(fname, O_RDONLY)) == -1) {
-		insert_string("failed to open:\n");
-		insert_string(fname);
-		insert_string("\n");
-		close(fd);
-		return 1;
-	}
-	
-	output = load_file(fd);
-	close(fd);
-
-	/* all exceptions start with the word error: */
-	if (NULL != strstr(output, "error:")) {
-		insert_string(output);
-		return 1;
-	}
-	return 0; /* success */
-}
-
 void load_config()
 {
 	char fname[300];
 	char *output;
 	int fd;
+	debug("load_config\n");
 
 	reset_output_stream();
 	(void)snprintf(fname, 300, "%s/%s", getenv("HOME"), E_INITFILE);
@@ -783,6 +761,7 @@ void load_config()
 	if ((fd = open(fname, O_RDONLY)) == -1)
 		fatal("failed to open " E_INITFILE " in HOME directory");
 
+	reset_output_stream();
 	output = load_file(fd);
 	assert(output != NULL);
 	close(fd);
@@ -791,6 +770,7 @@ void load_config()
 	if (NULL != strstr(output, "error:"))
 		fatal(output);
 	reset_output_stream();
+	debug("config loaded\n");
 }
 
 keymap_t *new_key(char *name, char *bytes)
@@ -928,7 +908,6 @@ int main(int argc, char **argv)
 
 	setup_keys();
 	(void)init_lisp();
-	reset_output_stream();
 	load_config();
 	initscr();	
 	raw();
