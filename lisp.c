@@ -61,7 +61,6 @@ typedef struct Stream {
 	StreamType type;
 	char *buffer;
 	int fd;
-	char overflow;
 	size_t length, capacity;
 	off_t offset, size;
 } Stream;
@@ -92,36 +91,24 @@ void writeObject(Object * object, bool readably, Stream *);
 
 void writeString(char *str, Stream *stream)
 {
-   int nbytes;
+   int len;
+   char *new;
 
    switch (stream->type) {
    case STREAM_TYPE_FILE:
-        nbytes = strlen(str);
-        nbytes = write(stream->fd, str, nbytes);
+        len = strlen(str);
+        len = write(stream->fd, str, len);
 	return;
 
     case STREAM_TYPE_STRING:
     default:		
-	if (stream->overflow) return; /* nothing we can do */
-        nbytes = strlen(str);
-
-	if (nbytes > (stream->capacity - stream->length - 1)) {
-		stream->overflow = 1;
-		nbytes = stream->capacity - stream->length - 1;
-	}
-
-	if (nbytes > 0 ) {	
-		memcpy(stream->buffer + stream->length, str, nbytes);
-		stream->length += nbytes;
-	        stream->buffer[stream->length] = '\0';
-	}
-
-	/* set the end of the buffer to $$ to show there was an overflow */
-	if (stream->overflow) {
-		stream->buffer[stream->length - 2] = '$';
-		stream->buffer[stream->length - 1] = '$';
-		stream->buffer[stream->length] = '\0';
-	}
+        len = strlen(str);
+	new = realloc(stream->buffer, stream->length + len + 1);
+	assert(new != NULL);
+	memcpy(new + stream->length, str, len);
+	stream->buffer = new;
+	stream->length += len;
+	new[stream->length] = '\0';
 	return;
     }
 }
@@ -180,7 +167,7 @@ void exceptionWithObject(Object * object, char *format, ...)
 
 	va_list args;
 	va_start(args, format);
-	int nbytes = snprintf(buf, WRITE_FMT_BUFSIZ, format, args);
+	(void)snprintf(buf, WRITE_FMT_BUFSIZ, format, args);
 	va_end(args);
 
 	writeString(buf, &ostream);
@@ -1572,14 +1559,15 @@ void set_input_stream_buffer(Stream *stream, char *buffer)
 	stream->size = 0;
 }
 
-void set_output_stream_buffer(Stream *stream, char *buffer, int o_size)
+void reset_output_stream()
 {
+	Stream *stream = &ostream; /* we only want 1 output stream */
 	stream->type = STREAM_TYPE_STRING;
-	stream->overflow = 0;
-	stream->capacity = o_size;
 	stream->length = 0;
-	stream->buffer = buffer;
-	stream->buffer[0] = '\0';
+	if (stream->buffer != NULL) {
+		free(stream->buffer);
+		stream->buffer = NULL;
+	}
 }
 
 void load_file_body(Object ** env, GC_PARAM)
@@ -1653,21 +1641,20 @@ int init_lisp()
 	return 0;
 }
 
-void call_lisp(char *input, char *output, int o_size)
+char *call_lisp(char *input)
 {
 	assert(input != NULL);
-	assert(output != NULL);
 	set_input_stream_buffer(&istream, input);
-	set_output_stream_buffer(&ostream, output, o_size);
 	call_lisp_body(theEnv, theRoot);
+	return ostream.buffer;
 }
 
-void load_file(int infd, char *output, int o_size)
+char *load_file(int infd)
 {
 	assert(output != NULL);
 	set_stream_file(&istream, infd);
-	set_output_stream_buffer(&ostream, output, o_size);
 	load_file_body(theEnv, theRoot);
+	return ostream.buffer;
 }
 
 

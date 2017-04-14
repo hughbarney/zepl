@@ -47,3 +47,9 @@
 (set-key "esc-a" "(duplicate_line)")
 (set-key "c-k" "(kill-to-eol)")
 (set-key "c-x ?" "(describe-key)")
+
+;; example: this keystroke will fail as we have not defined (dobee)
+;; the error will be displayed on the message line
+(set-key "esc-b" "(dobee)")
+
+

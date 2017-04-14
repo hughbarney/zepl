@@ -100,11 +100,30 @@ buffer_t* new_buffer()
 	return bp;
 }
 
+void debug(char *format, ...)
+{
+	char buffer[1024];
+	va_list args;
+	va_start (args, format);
+
+	static FILE *debug_fp = NULL;
+
+	if (debug_fp == NULL) {
+		debug_fp = fopen("debug.out","w");
+	}
+
+	vsprintf (buffer, format, args);
+	va_end(args);
+
+	fprintf(debug_fp,"%s", buffer);
+	fflush(debug_fp);
+}
+
 void fatal(char *msg)
 {
 	noraw();
 	endwin();
-	printf("\n" E_NAME " " E_VERSION ": \n%s\n", msg);
+	printf("\n%s %s:\n%s\n", E_NAME, E_VERSION, msg);
 	exit(1);
 }
 
@@ -687,35 +706,52 @@ void search()
 	}
 }
 
-extern void load_file(int, char *, int);
-extern void call_lisp(char *, char *, int);
+extern char *load_file(int);
+extern char *call_lisp(char *);
 extern void init_lisp(void);
-
-char output[4096];
+extern void reset_output_stream();
 
 void eval_block()
 {
+	char *output;
 	copy_cut(FALSE, FALSE);
 	assert(scrap != NULL);
 	assert(strlen(scrap) > 0);
-	call_lisp((char *)scrap, output, 4096);
+	reset_output_stream();
+	
+	output = call_lisp((char *)scrap);
 	insert_string("\n");
 	insert_string(output);
+	reset_output_stream();
 }
 
 void user_func()
 {
+	char *output;
 	assert(key_return != NULL);
 	if (0 == strcmp(key_return->k_funcname, E_NOT_BOUND)) {
 		msg(E_NOT_BOUND);
 		return;
 	}
-	call_lisp(key_return->k_funcname, output, 4096);
+
+	reset_output_stream();
+	output = call_lisp(key_return->k_funcname);
+
+	/* show errors on message line */
+	if (NULL != strstr(output, "error:")) {
+		char buf[81];
+		strncpy(buf, output, 80);
+		buf[80] ='\0';
+		msg(buf);
+	}	
+	reset_output_stream();
 }
 
+/* move this to lisp */
 int load_lisp_file(char *fname)
 {
 	int fd;
+	char *output;
 	if ((fd = open(fname, O_RDONLY)) == -1) {
 		insert_string("failed to open:\n");
 		insert_string(fname);
@@ -724,34 +760,37 @@ int load_lisp_file(char *fname)
 		return 1;
 	}
 	
-	load_file(fd, output, 4096);
+	output = load_file(fd);
 	close(fd);
-	
+
 	/* all exceptions start with the word error: */
 	if (NULL != strstr(output, "error:")) {
 		insert_string(output);
 		return 1;
 	}
-
 	return 0; /* success */
 }
 
 void load_config()
 {
-	char buf[300];
+	char fname[300];
+	char *output;
 	int fd;
 
-	(void)snprintf(buf, 300, "%s/%s", getenv("HOME"), E_INITFILE);
+	reset_output_stream();
+	(void)snprintf(fname, 300, "%s/%s", getenv("HOME"), E_INITFILE);
 
-	if ((fd = open(buf, O_RDONLY)) == -1)
+	if ((fd = open(fname, O_RDONLY)) == -1)
 		fatal("failed to open " E_INITFILE " in HOME directory");
 
-	load_file(fd, output, 4096);
+	output = load_file(fd);
+	assert(output != NULL);
 	close(fd);
 
 	/* all exceptions start with the word error: */
 	if (NULL != strstr(output, "error:"))
 		fatal(output);
+	reset_output_stream();
 }
 
 keymap_t *new_key(char *name, char *bytes)
@@ -889,6 +928,7 @@ int main(int argc, char **argv)
 
 	setup_keys();
 	(void)init_lisp();
+	reset_output_stream();
 	load_config();
 	initscr();	
 	raw();
