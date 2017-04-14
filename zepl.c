@@ -16,7 +16,7 @@
 #include <termios.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.2"
+#define E_VERSION       "v0.3"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -107,21 +107,20 @@ buffer_t* new_buffer()
 
 void fatal(char *msg)
 {
-	move(LINES-1, 0);
-	refresh();
 	noraw();
 	endwin();
 	printf("\n" E_NAME " " E_VERSION ": \n%s\n", msg);
 	exit(1);
 }
 
-void msg(char *msg, ...)
+int msg(char *msg, ...)
 {
 	va_list args;
 	va_start(args, msg);
 	(void)vsprintf(msgline, msg, args);
 	va_end(args);
 	msgflag = TRUE;
+	return FALSE;
 }
 
 /* Given a buffer offset, convert it to a pointer into the buffer */
@@ -161,15 +160,9 @@ int growgap(buffer_t *bp, point_t n)
 		new = (char_t*) malloc((size_t) newlen);
 		if (new == NULL) fatal("Failed to allocate required memory.\n");
 	} else {
-		if (newlen < 0 || MAX_SIZE_T < newlen) {
-			msg("Failed to allocate required memory");
-			return (FALSE);
-		}
+		if (newlen < 0 || MAX_SIZE_T < newlen) return msg("Failed to allocate required memory");
 		new = (char_t*) realloc(bp->b_buf, (size_t) newlen);
-		if (new == NULL) {
-			msg("Failed to allocate required memory");    /* Report non-fatal error. */
-			return (FALSE);
-		}
+		if (new == NULL) return msg("Failed to allocate required memory");
 	}
 
 	/* Relocate pointers in new buffer and append the new
@@ -226,27 +219,17 @@ int insert_file(char *fn, int modflag)
 	size_t len;
 	struct stat sb;
 
-	if (stat(fn, &sb) < 0) {
-		msg("Failed to find file \"%s\".", fn);
-		return (FALSE);
-	}
-	if (MAX_SIZE_T < sb.st_size) {
-		msg("File \"%s\" is too big to load.", fn);
-		return (FALSE);
-	}
+	if (stat(fn, &sb) < 0) return msg("Failed to find file \"%s\".", fn);
+	if (MAX_SIZE_T < sb.st_size) msg("File \"%s\" is too big to load.", fn);
+
 	if (curbp->b_egap - curbp->b_gap < sb.st_size * sizeof (char_t) && !growgap(curbp, sb.st_size))
 		return (FALSE);
-	if ((fp = fopen(fn, "r")) == NULL) {
-		msg("Failed to open file \"%s\".", fn);
-		return (FALSE);
-	}
+	if ((fp = fopen(fn, "r")) == NULL) return msg("Failed to open file \"%s\".", fn);
+
 	curbp->b_point = movegap(curbp, curbp->b_point);
 	curbp->b_gap += len = fread(curbp->b_gap, sizeof (char), (size_t) sb.st_size, fp);
 
-	if (fclose(fp) != 0) {
-		msg("Failed to close file \"%s\".", fn);
-		return (FALSE);
-	}
+	if (fclose(fp) != 0) return msg("Failed to close file \"%s\".", fn);
 	curbp->b_flags &= (modflag ? B_MODIFIED : ~B_MODIFIED);
 	msg("File \"%s\" %ld bytes read.", fn, len);
 	return (TRUE);
@@ -872,7 +855,6 @@ int set_key(char *name, char *funcname)
 void setup_keys()
 {
 	create_keys();
-	
         set_key_internal("c-a",     "(beginning-of-line)",   "\x01", lnbegin);
 	set_key_internal("c-b",     "(backward-char)",       "\x02", left);
 	set_key_internal("c-d",     "(delete)",              "\x04", delete);
@@ -942,8 +924,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	move(MSGLINE, 0);
-	refresh();
 	noraw();
 	endwin();
 	return 0;
