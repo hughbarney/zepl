@@ -13,6 +13,13 @@
 (defun repeat (n func)  
   (cond ((> n 0) (func) (repeat (- n 1) func))))
 
+;; concatenate a list of strings
+(defun concat(args)
+  (cond
+    ((null args) "")
+    ((null (cdr args)) (car args))
+    (t (string.append (car args) (concat (cdr args))))))
+
 (defun duplicate_line()
   (beginning-of-line)
   (set-mark)
@@ -22,7 +29,7 @@
   (yank)
   (previous-line))
 
-;; second example that uses if and progn
+;; kill to end of line, uses if and progn
 (defun kill-to-eol()
   (if (eq "\n" (get-char))
     (progn
@@ -32,17 +39,13 @@
       (end-of-line)
       (kill-region))))
 
-;;
 ;; prompt for a keystroke then show its name
-;; (once we have string.append we can display both name and funcname in the message
-;;
 (defun describe-key()
   (prompt "Describe Key: " "")
   (setq key (get-key))
   (cond
     ((not (eq key "")) (message key))
-    (t (message (get-key-funcname)))))
-
+    (t (message (concat (list (get-key-name) " runs command " (get-key-funcname)))))))
 
 (set-key "esc-a" "(duplicate_line)")
 (set-key "c-k" "(kill-to-eol)")

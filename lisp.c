@@ -1030,6 +1030,24 @@ Object *e_set_key(Object ** args, GC_PARAM)
 	return (1 == set_key(first->string, second->string) ? t : nil);
 }
 
+Object *stringAppend(Object ** args, GC_PARAM)
+{
+	TWO_STRING_ARGS();
+
+	int len1 = strlen(first->string);
+	int len2 = strlen(second->string);
+	char *new = strdup(first->string);
+	new = realloc(new, len1 + len2 + 1);
+	assert(new != NULL);
+	memcpy(new + len1, second->string, len2);
+	new[len1 + len2] = '\0';
+
+	Object *obj = newStringWithLength(new, len1 + len2, GC_ROOTS);	
+	free(new);
+
+	return obj;
+}
+
 Object *e_prompt(Object ** args, GC_PARAM)
 {
 	TWO_STRING_ARGS();
@@ -1173,6 +1191,7 @@ Primitive primitives[] = {
 	{">=", 1, -1, primitiveGreaterEqual},
 
 	{"string?", 1, 1, primitiveStringQ},
+	{"string.append", 2, 2, stringAppend},
 	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},
