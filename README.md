@@ -137,6 +137,13 @@ The example shows how the editor can be extended.
     (defun repeat (n func)  
       (cond ((> n 0) (func) (repeat (- n 1) func))))
     
+    ;; concatenate a list of strings
+    (defun concat(args)
+      (cond
+        ((null args) "")
+        ((null (cdr args)) (car args))
+        (t (string.append (car args) (concat (cdr args))))))
+    
     (defun duplicate_line()
       (beginning-of-line)
       (set-mark)
@@ -146,30 +153,31 @@ The example shows how the editor can be extended.
       (yank)
       (previous-line))
     
+    ;; kill to end of line, uses if and progn
     (defun kill-to-eol()
-      (cond 
-        ((eq "\n" (get-char)) 
-           (delete))
-        (t 
-           (set-mark)
-           (end-of-line)
-           (kill-region)) ))
+      (if (eq "\n" (get-char))
+        (progn
+          (delete))
+        (progn
+          (set-mark)
+          (end-of-line)
+          (kill-region))))
     
-    ;;
     ;; prompt for a keystroke then show its name
-    ;; (once we have string.append we can display both name and funcname in the message
-    ;;
     (defun describe-key()
       (prompt "Describe Key: " "")
       (setq key (get-key))
       (cond
         ((not (eq key "")) (message key))
-        (t (message (get-key-name)))))
-    
+        (t (message (concat (list (get-key-name) " runs command " (get-key-funcname)))))))
     
     (set-key "esc-a" "(duplicate_line)")
     (set-key "c-k" "(kill-to-eol)")
     (set-key "c-x ?" "(describe-key)")
+    
+    ;; example: this keystroke will fail as we have not defined (dobee)
+    ;; the error will be displayed on the message line
+    (set-key "esc-b" "(dobee)")
 ```
 
 ## Build in Editor functions that can be called through lisp.
@@ -194,6 +202,7 @@ The example shows how the editor can be extended.
 	(exit)
 
 	(string? symbol)                        # return true if symbol is a string
+	(string.append "string1" "string2"      # concatenate 2 strings returning a new string
 	(load "filename")                       # load and evaluate the lisp file
 	(message "the text of the message")     # set the message line
 	(set-key "name" "(function-name)"       # specify a key binding
@@ -265,7 +274,6 @@ In order to be able to easily embed a Lisp interpretter into an application a sm
 ```lisp
     (string.ref string n)                 ;; return character (as a string) at position n in the string
     (string.substring string n1 n2        ;; return a substring of string from ref n1 to n2
-    (string.append string1 string2)       ;; return a new string of string1 concatenated with string2
 	(number->string n)                    ;; return a string representation of number n
 	(string->number s)                    ;; return a number converted from the string, eg "99" -> 99
 ```
@@ -278,19 +286,6 @@ In order to be able to easily embed a Lisp interpretter into an application a sm
     Make Zepl handle multiple files       ;; this is fairly easy to do as I have 3 other editors that
 	                                      ;; implement this in about 120 lines.
 
-
-## Known Issues
-
-when evaluating load("lisp.lsp") in the buffer a recursive call gets setup between call_lisp(), load_file().
-This results in the output buffer being reset.
-
-To resolve this issue I need to rewite the Stream code in lisp.c so that the buffer is allocated
-from memory.  Also so that a new instance of output stream is created for the load as well as for the
-call_lisp().   The call_lisp() function will then be invoked as follows:
-
-```c
-      char *output = call_lisp(input);
-```
 
 ## Copying
   Zepl is released to the public domain.

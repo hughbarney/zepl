@@ -1,3 +1,23 @@
+/*
+ * tiny-lisp interpretter based on
+ * https://github.com/matp/tiny-lisp
+ *
+ * with modifications and extension to enable it to be embedded and called
+ * by an application.
+ *
+ *  int init_lisp()
+ *  char *call_lisp(char *input)
+ *  char *load_file(charint infd, char *output, int o_size)
+ *
+ * Input and Output is a Stream abstraction layer.
+ * There is 1 and only 1 output stream which is only cleared
+ * after calling reset_output_stream().
+ * Each call to call_lisp() or load_file() results in the creation of
+ * a new input stream instance so that these calls do not fight over
+ * the input stream.
+ *
+ */
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <assert.h>
@@ -11,9 +31,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-extern void debug(char *, ...);
-
 
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
@@ -1077,7 +1094,7 @@ Object *e_load(Object ** args, GC_PARAM)
 	if (first->type != TYPE_STRING)
 	    exceptionWithObject(first, "is not a string");
 
-	debug("load_file: %s\n", first->string);
+	//debug("load_file: %s\n", first->string);
 
 	if ((fd = open(first->string, O_RDONLY)) == -1) {
 		snprintf(ebuf, 80, "failed to open %s", first->string);
@@ -1087,8 +1104,8 @@ Object *e_load(Object ** args, GC_PARAM)
 		return nil;
 	}
 
-	debug("e_load() fd=%d\n", fd);	
-	load_file(fd); // XXX maybe recursive ?
+	//debug("e_load() fd=%d\n", fd);	
+	load_file(fd);
 	close(fd);
 	return t;
 }
@@ -1538,11 +1555,8 @@ Object **theEnv;
 void set_stream_file(Stream *stream, int fd)
 {
 	assert(stream != NULL);
-	debug("set_stream_file %d\n", fd);
 	stream->type = STREAM_TYPE_FILE;
 	stream->fd = fd;
-	//stream->offset = 0;
-	//stream->size = 0;
 }
 
 void set_input_stream_buffer(Stream *stream, char *buffer)
@@ -1572,7 +1586,7 @@ void reset_output_stream()
 
 void load_file_body(Object ** env, GC_PARAM, Stream *input_stream)
 {
-	debug("load_file_body\n");
+	//debug("load_file_body\n");
 	GC_TRACE(gcObject, nil);
 
 	if (setjmp(exceptionEnv))
@@ -1610,15 +1624,8 @@ void call_lisp_body(Object ** env, GC_PARAM, Stream *input_stream)
 }
 
 /*
- * Three interface functions that allow this tiny-lisp to be 
- * embedded in another application.
- *
- * int init_lisp()
- * void call_lisp(char *input, char *output, int o_size)
- * void load_file(int infd, char *output, int o_size)
- *
+ * 3 interface functions that enable lisp to be embedded in an application (eg Editor)
  */
-
 int init_lisp()
 {
 	theRoot = nil;
@@ -1647,21 +1654,18 @@ char *call_lisp(char *input)
 	assert(input != NULL);
 	Stream is = { .type = STREAM_TYPE_STRING };
 
-	debug("call_lisp()\n");
+	//debug("call_lisp()\n");
 	set_input_stream_buffer(&is, input);
 	call_lisp_body(theEnv, theRoot, &is);
-	debug("call_lisp() done\n");
+	//debug("call_lisp() done\n");
 	return ostream.buffer;
 }
 
 char *load_file(int infd)
 {
-	debug("load_file fd=%d\n", infd);
+	//debug("load_file fd=%d\n", infd);
 	Stream input_stream = { .type = STREAM_TYPE_FILE, .fd = -1 };
-
 	set_stream_file(&input_stream, infd);
-	debug("load_file stream fd=%d\n", input_stream.fd);
-	debug("load_file stream type=%d\n", input_stream.type);
 	load_file_body(theEnv, theRoot, &input_stream);
 	return ostream.buffer;
 }

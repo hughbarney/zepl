@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.4"
+#define E_VERSION       "v0.5"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -98,25 +98,6 @@ buffer_t* new_buffer()
 	bp->w_top = 0;	
 	bp->w_rows = LINES - 2;
 	return bp;
-}
-
-void debug(char *format, ...)
-{
-	char buffer[1024];
-	va_list args;
-	va_start (args, format);
-
-	static FILE *debug_fp = NULL;
-
-	if (debug_fp == NULL) {
-		debug_fp = fopen("debug.out","w");
-	}
-
-	vsprintf (buffer, format, args);
-	va_end(args);
-
-	fprintf(debug_fp,"%s", buffer);
-	fflush(debug_fp);
 }
 
 void fatal(char *msg)
@@ -716,7 +697,6 @@ extern void reset_output_stream();
 
 void eval_block()
 {
-	debug("START: eval_block\n");
 	char *output;
 	assert(curbp->b_mark != NOMARK);
 	assert(curbp->b_mark - curbp->b_point != 0);
@@ -725,16 +705,11 @@ void eval_block()
 	assert(scrap != NULL);
 	assert(strlen(scrap) > 0);
 
-	debug("eval (nscrap) = %d\n", nscrap);
-	debug("eval = %s\n", scrap);
-	
 	reset_output_stream();
-	
 	output = call_lisp((char *)scrap);
 	insert_string("\n");
 	insert_string(output);
 	reset_output_stream();
-	debug("STOP: eval_block\n");
 }
 
 void user_func()
@@ -764,7 +739,6 @@ void load_config()
 	char fname[300];
 	char *output;
 	int fd;
-	debug("load_config\n");
 
 	reset_output_stream();
 	(void)snprintf(fname, 300, "%s/%s", getenv("HOME"), E_INITFILE);
@@ -781,7 +755,6 @@ void load_config()
 	if (NULL != strstr(output, "error:"))
 		fatal(output);
 	reset_output_stream();
-	debug("config loaded\n");
 }
 
 keymap_t *new_key(char *name, char *bytes)
