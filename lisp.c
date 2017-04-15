@@ -67,8 +67,8 @@ typedef struct Stream {
 	off_t offset, size;
 } Stream;
 
-Stream istream = { .type = STREAM_TYPE_FILE,.fd = STDIN_FILENO };
-Stream ostream = { .type = STREAM_TYPE_FILE,.fd = STDOUT_FILENO };
+//Stream istream = { .type = STREAM_TYPE_FILE,.fd = STDIN_FILENO };
+Stream ostream = { .type = STREAM_TYPE_FILE, .buffer = NULL, .fd = STDOUT_FILENO };
 
 typedef struct Memory {
 	size_t capacity, fromOffset, toOffset;
@@ -1518,6 +1518,7 @@ Object **theEnv;
 
 void set_stream_file(Stream *stream, int fd)
 {
+	assert(stream != NULL);
 	debug("set_stream_file %d\n", fd);
 	stream->type = STREAM_TYPE_FILE;
 	stream->fd = fd;
@@ -1603,7 +1604,7 @@ int init_lisp()
 {
 	theRoot = nil;
 
-	set_stream_file(&istream, STDIN_FILENO);
+	//set_stream_file(&istream, STDIN_FILENO);
 	set_stream_file(&ostream, STDOUT_FILENO);
 
 	if (setjmp(exceptionEnv))
@@ -1625,12 +1626,10 @@ int init_lisp()
 char *call_lisp(char *input)
 {
 	assert(input != NULL);
-	Stream is = { STREAM_TYPE_STRING };
+	Stream is = { .type = STREAM_TYPE_STRING };
 
 	debug("call_lisp()\n");
-	//set_input_stream_buffer(&istream, input);
 	set_input_stream_buffer(&is, input);
-	//call_lisp_body(theEnv, theRoot, &istream);
 	call_lisp_body(theEnv, theRoot, &is);
 	debug("call_lisp() done\n");
 	return ostream.buffer;
@@ -1639,7 +1638,8 @@ char *call_lisp(char *input)
 char *load_file(int infd)
 {
 	debug("load_file fd=%d\n", infd);
-	Stream input_stream = { STREAM_TYPE_FILE, .fd = -1 };
+	Stream input_stream = { .type = STREAM_TYPE_FILE, .fd = -1 };
+
 	set_stream_file(&input_stream, infd);
 	debug("load_file stream fd=%d\n", input_stream.fd);
 	debug("load_file stream type=%d\n", input_stream.type);

@@ -86,6 +86,7 @@ buffer_t* new_buffer()
 	buffer_t *bp = (buffer_t *)malloc(sizeof(buffer_t));
 	assert(bp != NULL);
 	bp->b_point = 0;
+	bp->b_mark = NOMARK;
 	bp->b_page = 0;
 	bp->b_epage = 0;
 	bp->b_flags = 0;
@@ -550,18 +551,20 @@ void delete()
 void set_mark()
 {
 	curbp->b_mark = (curbp->b_mark == curbp->b_point ? NOMARK : curbp->b_point);
-	msg("Mark set");
+	if (curbp->b_mark != NOMARK) msg("Mark set");
 }
 
 void copy_cut(int cut, int verbose)
 {
 	char_t *p;
-	/* if no mark or point == marker, nothing doing */
-	if (curbp->b_mark == NOMARK || curbp->b_point == curbp->b_mark) return;
 	if (scrap != NULL) {
 		free(scrap);
 		scrap = NULL;
+		nscrap = 0;
 	}
+	/* if no mark or point == marker, nothing doing */
+	if (curbp->b_mark == NOMARK || curbp->b_point == curbp->b_mark) return;
+
 	if (curbp->b_point < curbp->b_mark) {
 		/* point above marker: move gap under point, region = marker - point */
 		(void)movegap(curbp, curbp->b_point);
@@ -573,6 +576,7 @@ void copy_cut(int cut, int verbose)
 		p = ptr(curbp, curbp->b_mark);
 		nscrap = curbp->b_point - curbp->b_mark;
 	}
+	assert(nscrap > 0);
 	if ((scrap = (char_t*) malloc(nscrap + 1)) == NULL) {
 		msg("No more memory available.");
 	} else {
@@ -714,9 +718,16 @@ void eval_block()
 {
 	debug("START: eval_block\n");
 	char *output;
+	assert(curbp->b_mark != NOMARK);
+	assert(curbp->b_mark - curbp->b_point != 0);
+
 	copy_cut(FALSE, FALSE);
 	assert(scrap != NULL);
 	assert(strlen(scrap) > 0);
+
+	debug("eval (nscrap) = %d\n", nscrap);
+	debug("eval = %s\n", scrap);
+	
 	reset_output_stream();
 	
 	output = call_lisp((char *)scrap);
