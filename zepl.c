@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.5"
+#define E_VERSION       "v0.6"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -75,7 +75,6 @@ char temp[TEMPBUF];
 keymap_t *key_return;
 keymap_t *khead = NULL;
 keymap_t *ktail = NULL;
-
 buffer_t *curbp;
 point_t nscrap = 0;
 char_t *scrap = NULL;
@@ -699,7 +698,7 @@ void eval_block()
 {
 	char *output;
 	assert(curbp->b_mark != NOMARK);
-	assert(curbp->b_mark - curbp->b_point != 0);
+	assert(curbp->b_point > curbp->b_mark);
 
 	copy_cut(FALSE, FALSE);
 	assert(scrap != NULL);

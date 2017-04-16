@@ -1065,6 +1065,50 @@ Object *stringAppend(Object ** args, GC_PARAM)
 	return obj;
 }
 
+Object *stringSubstring(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	Object *second = (*args)->cdr->car;
+	Object *third = (*args)->cdr->cdr->car;
+
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+	if (second->type != TYPE_NUMBER)
+	    exceptionWithObject(second, "is not a number");  
+	if (third->type != TYPE_NUMBER)
+	    exceptionWithObject(third, "is not a number");  
+
+	int start = (int)(second->number);
+	int end = (int)(third->number);
+	int len = strlen(first->string);
+
+	if (start < 0 || start > len -1)
+	    exceptionWithObject(second, "is out of bounds");
+	if (end < 0 || end > len -1)
+	    exceptionWithObject(third, "is out of bounds");
+	if (start > end)
+	    exceptionWithObject(second, "start index greater than end index");
+
+	char *sub = strdup(first->string);
+	int newlen = end - start + 1;
+
+	memcpy(sub, (first->string + start), newlen);
+	*(sub + newlen) = '\0';
+	Object *obj = newStringWithLength(sub, newlen, GC_ROOTS);
+	free(sub);
+
+	return obj;
+}
+
+Object *stringLength(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+
+	return newNumber(strlen(first->string), GC_ROOTS);	
+}
+
 Object *e_prompt(Object ** args, GC_PARAM)
 {
 	TWO_STRING_ARGS();
@@ -1082,6 +1126,17 @@ Object *primitiveNumberQ(Object ** args, GC_PARAM)
 {
 	Object *first = (*args)->car;
 	return (first != nil && first->type == TYPE_NUMBER) ? t : nil;
+}
+
+Object *stringToNumber(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+
+	double num = strtod(first->string, NULL);
+	return newNumber(num, GC_ROOTS);
 }
 
 char *load_file(int);
@@ -1206,9 +1261,11 @@ Primitive primitives[] = {
 	{"<=", 1, -1, primitiveLessEqual},
 	{">", 1, -1, primitiveGreater},
 	{">=", 1, -1, primitiveGreaterEqual},
-
 	{"string?", 1, 1, primitiveStringQ},
+	{"string.length", 1, 1, stringLength},
 	{"string.append", 2, 2, stringAppend},
+	{"string.substring", 3, 3, stringSubstring},
+	{"string->number", 1, 1, stringToNumber},
 	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},

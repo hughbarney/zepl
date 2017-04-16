@@ -20,6 +20,30 @@
     ((null (cdr args)) (car args))
     (t (string.append (car args) (concat (cdr args))))))
 
+;; shrink string by dropping off last char
+(defun shrink(s)
+  (cond
+    ((< (string.length s) 2) "")
+    (t (string.substring s 0 (- (string.length s) 2)))  ))
+
+;; prompt for string and return response, handle backspace, cr and c-g
+(defun input(q response)
+  (prompt q response)
+  (setq key (get-key))
+  (if (eq key "")
+  (cond
+    ((eq "backspace" (get-key-name)) (setq key "backspace"))
+    (t (setq key "c-g"))))
+  (cond
+    ((eq key "\n") response)
+    ((eq key "c-g") "")
+    ((eq key "backspace") (input q (shrink response)))
+    (t (input q (string.append response key)))  ))
+
+;;
+;;  Extend the Editor with some useful functions
+;;
+
 (defun duplicate_line()
   (beginning-of-line)
   (set-mark)
@@ -47,7 +71,20 @@
     ((not (eq key "")) (message key))
     (t (message (concat (list (get-key-name) " runs command " (get-key-funcname)))))))
 
+;; goto the line requested
+;; (does not check for stupid responses yet)
+(defun gotoline()
+ (setq line (input "Goto line: " ""))
+ (cond
+   ((eq line "") ())
+   (t (setq ln (string->number line)) (beginning-of-buffer) (repeat (- ln 1) next-line)) ))
+
+;;
+;;  Key Bindings 
+;;
+
 (set-key "esc-a" "(duplicate_line)")
+(set-key "esc-g" "(gotoline)")
 (set-key "c-k" "(kill-to-eol)")
 (set-key "c-x ?" "(describe-key)")
 

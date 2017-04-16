@@ -203,6 +203,9 @@ The example shows how the editor can be extended.
 
 	(string? symbol)                        # return true if symbol is a string
 	(string.append "string1" "string2"      # concatenate 2 strings returning a new string
+        (string.substring string n1 n2          # return a substring of string from ref n1 to n2
+	(string->number s)                      # return a number converted from the string, eg "99" -> 99
+
 	(load "filename")                       # load and evaluate the lisp file
 	(message "the text of the message")     # set the message line
 	(set-key "name" "(function-name)"       # specify a key binding
@@ -273,18 +276,13 @@ In order to be able to easily embed a Lisp interpretter into an application a sm
 
 ```lisp
     (string.ref string n)                 ;; return character (as a string) at position n in the string
-    (string.substring string n1 n2        ;; return a substring of string from ref n1 to n2
-	(number->string n)                    ;; return a string representation of number n
-	(string->number s)                    ;; return a number converted from the string, eg "99" -> 99
+    (number->string n)                    ;; return a string representation of number n
 ```
 
 ## Future Editor Features
 
-    (goto-line n)                         ;; prompt for a line number, convert the string to a number
-	                                      ;; go to beginning of buffer, move down n-1 lines
-
     Make Zepl handle multiple files       ;; this is fairly easy to do as I have 3 other editors that
-	                                      ;; implement this in about 120 lines.
+	                                  ;; implement this in about 120 lines.
 
 
 ## Copying
