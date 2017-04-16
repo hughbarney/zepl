@@ -277,6 +277,7 @@ In order to be able to easily embed a Lisp interpretter into an application a sm
 ```lisp
     (string.ref string n)                 ;; return character (as a string) at position n in the string
     (number->string n)                    ;; return a string representation of number n
+    (string.find str s)                   ;; find start of string s in string str
 ```
 
 ## Future Editor Features
