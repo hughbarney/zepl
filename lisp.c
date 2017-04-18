@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <curses.h>
 
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
@@ -1139,6 +1140,30 @@ Object *stringToNumber(Object ** args, GC_PARAM)
 	return newNumber(num, GC_ROOTS);
 }
 
+Object *e_getch(Object ** args, GC_PARAM)
+{
+	char ch[2];
+	ch[0] = (unsigned char)getch();
+	ch[1] = '\0';
+	return newStringWithLength(ch, 1, GC_ROOTS);
+}
+
+
+Object *asciiToString(Object ** args, GC_PARAM)
+{
+	char ch[2];
+	Object *first = (*args)->car;
+
+	if (first->type != TYPE_NUMBER)
+	    exceptionWithObject(first, "is not a number");
+	if (first->type < 0 || first->type > 255)
+	    exceptionWithObject(first, "is not in range 0-255");
+
+	ch[0] = (unsigned char)first->number;
+	ch[1] = '\0';
+	return newStringWithLength(ch, 1, GC_ROOTS);
+}
+
 char *load_file(int);
 
 Object *e_load(Object ** args, GC_PARAM)
@@ -1266,6 +1291,8 @@ Primitive primitives[] = {
 	{"string.append", 2, 2, stringAppend},
 	{"string.substring", 3, 3, stringSubstring},
 	{"string->number", 1, 1, stringToNumber},
+
+	{"ascii", 1, 1, asciiToString},
 	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},
@@ -1275,6 +1302,7 @@ Primitive primitives[] = {
 	{"get-key", 0, 0, e_get_key},
 	{"get-key-name", 0, 0, e_get_key_name},
 	{"get-key-funcname", 0, 0, e_get_key_funcname},
+	{"getch", 0, 0, e_getch},
 
 	{"beginning-of-buffer", 0, 0, e_top},
 	{"end-of-buffer", 0, 0, e_bottom},
