@@ -26,24 +26,71 @@
     ((< (string.length s) 2) "")
     (t (string.substring s 0 (- (string.length s) 2)))  ))
 
+;; some keystroke checks that we will use later
+(defun is_ctl_g(k)
+  (eq k (ascii 7)))
+
+(defun is_escape(k)
+  (eq k (ascii 27)))
+
+(defun is_backspace(k)
+  (or (eq k (ascii 8)) (eq k (ascii 127))))
+
+(defun is_ctl_s(k)
+  (eq k (ascii 19)))
+
+(defun is_control_char(k)
+  (and (>= (ascii->number k) 0) (<= (ascii->number k) 31)))
+
+
 ;; prompt for string and return response, handle backspace, cr and c-g
 (defun input(q response)
   (prompt q response)
-  (setq key (get-key))
-  (if (eq key "")
-  (cond
-    ((eq "backspace" (get-key-name)) (setq key "backspace"))
-    (t (setq key "c-g"))))
+  (setq key (getch))
   (cond
     ((eq key "\n") response)
-    ((eq key "c-g") "")
-    ((eq key "backspace") (input q (shrink response)))
+    ((is_ctl_g key) "")
+    ((is_backspace key) (input q (shrink response)))
+    ((is_control_char key) (input q response))
     (t (input q (string.append response key)))  ))
 
 ;;
-;;  Extend the Editor with some useful functions
+;; search function
 ;;
+(defun search()
+  (setq o_point (get-point))
+  (prompt "Search: " "")
+  (search_body "Search: " ""))
 
+;; search, handle backspace, c-s, escape, cr and c-g
+(defun search_body(q response)
+  (setq key (getch))
+  (refresh)
+  (cond
+    ((is_ctl_g key) (set-point o_point))
+    ((is_escape key) "")
+    ((is_backspace key) (prompt q (shrink response)) (search_body q (shrink response)))
+    ((is_ctl_s key)
+       (setq spt (search-forward (get-point) response))
+       (display_search_result spt q response)
+       (search_body q response))
+    ((is_control_char key) (search_body q response))
+    (t (prompt q (string.append response key)) (search_body q (string.append response key)))  ))
+
+;; given a search result, update the screen or warn that it failed
+(defun display_search_result(loc q search)
+  (if (not (eq loc -1))
+    (progn
+      (set-point loc)
+      (message (string.append q search))
+      (display))
+    (progn
+      (prompt (string.append "Failing " q) search)
+      (set-point 0)) ))
+
+;;
+;; duplicate a line
+;;
 (defun duplicate_line()
   (beginning-of-line)
   (set-mark)
@@ -79,6 +126,8 @@
    ((eq line "") ())
    (t (setq ln (string->number line)) (beginning-of-buffer) (repeat (- ln 1) next-line)) ))
 
+
+
 ;;
 ;;  Key Bindings 
 ;;
@@ -86,10 +135,6 @@
 (set-key "esc-a" "(duplicate_line)")
 (set-key "esc-g" "(gotoline)")
 (set-key "c-k" "(kill-to-eol)")
+(set-key "c-s" "(search)")
 (set-key "c-x ?" "(describe-key)")
-
-;; example: this keystroke will fail as we have not defined (dobee)
-;; the error will be displayed on the message line
-(set-key "esc-b" "(dobee)")
-
 

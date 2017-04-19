@@ -33,6 +33,8 @@
 #include <unistd.h>
 #include <curses.h>
 
+typedef long point_t;
+
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
 #endif
@@ -1010,6 +1012,7 @@ DEFINE_EDITOR_FUNC(down)
 DEFINE_EDITOR_FUNC(lnbegin)
 DEFINE_EDITOR_FUNC(lnend)
 DEFINE_EDITOR_FUNC(yank)
+DEFINE_EDITOR_FUNC(display)
 DEFINE_EDITOR_FUNC(copy_region)
 DEFINE_EDITOR_FUNC(set_mark)
 DEFINE_EDITOR_FUNC(kill_region)
@@ -1041,6 +1044,12 @@ Object *e_get_key_funcname(Object **args, GC_PARAM) { return newString(get_key_f
 	    exceptionWithObject(first, "is not a string");   \
 	if (second->type != TYPE_STRING)                     \
 	    exceptionWithObject(second, "is not a string");  
+
+Object *e_refresh(Object ** args, GC_PARAM)
+{
+	refresh();
+	return t;
+}
 
 Object *e_set_key(Object ** args, GC_PARAM)
 {
@@ -1140,6 +1149,22 @@ Object *stringToNumber(Object ** args, GC_PARAM)
 	return newNumber(num, GC_ROOTS);
 }
 
+extern point_t search_forward_curbp(point_t, char *);
+
+Object *e_search_forward(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	Object *second = (*args)->cdr->car;
+
+	if (first->type != TYPE_NUMBER)
+	    exceptionWithObject(first, "is not a number");
+	if (second->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a string");
+
+	double num = search_forward_curbp((point_t)first->number, second->string);
+	return newNumber(num, GC_ROOTS);
+}
+
 Object *e_getch(Object ** args, GC_PARAM)
 {
 	char ch[2];
@@ -1147,7 +1172,6 @@ Object *e_getch(Object ** args, GC_PARAM)
 	ch[1] = '\0';
 	return newStringWithLength(ch, 1, GC_ROOTS);
 }
-
 
 Object *asciiToString(Object ** args, GC_PARAM)
 {
@@ -1164,6 +1188,18 @@ Object *asciiToString(Object ** args, GC_PARAM)
 	return newStringWithLength(ch, 1, GC_ROOTS);
 }
 
+Object *asciiToNumber(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+
+	if (first->type != TYPE_STRING)
+	    exceptionWithObject(first, "is not a number");
+	if (strlen(first->string) < 1)
+	    exceptionWithObject(first, "is empty");
+
+	return newNumber((double)*first->string, GC_ROOTS);
+}
+
 char *load_file(int);
 
 Object *e_load(Object ** args, GC_PARAM)
@@ -1173,8 +1209,6 @@ Object *e_load(Object ** args, GC_PARAM)
 	Object *first = (*args)->car;
 	if (first->type != TYPE_STRING)
 	    exceptionWithObject(first, "is not a string");
-
-	//debug("load_file: %s\n", first->string);
 
 	if ((fd = open(first->string, O_RDONLY)) == -1) {
 		snprintf(ebuf, 80, "failed to open %s", first->string);
@@ -1197,6 +1231,23 @@ Object *e_message(Object ** args, GC_PARAM)
 	    exceptionWithObject(first, "is not a string");
 	msg(first->string);
 	return t;
+}
+
+extern void set_point(point_t);
+extern point_t get_point(void);
+
+Object *e_set_point(Object ** args, GC_PARAM)
+{
+	Object *first = (*args)->car;
+	if (first->type != TYPE_NUMBER)
+	    exceptionWithObject(first, "is not a number");
+	set_point(first->number);
+	return t;
+}
+
+Object *e_get_point(Object ** args, GC_PARAM)
+{
+	return newNumber(get_point(), GC_ROOTS);
 }
 
 #define DEFINE_PRIMITIVE_ARITHMETIC(name, op, init)                          \
@@ -1293,9 +1344,12 @@ Primitive primitives[] = {
 	{"string->number", 1, 1, stringToNumber},
 
 	{"ascii", 1, 1, asciiToString},
+	{"ascii->number", 1, 1, asciiToNumber},
 	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},
+	{"set-point", 1, 1, e_set_point},
+	{"get-point", 0, 0, e_get_point},
 	{"set-key", 2, 2, e_set_key},
 	{"prompt", 2, 2, e_prompt},	
 	{"get-char", 0, 0, e_get_char},
@@ -1303,6 +1357,9 @@ Primitive primitives[] = {
 	{"get-key-name", 0, 0, e_get_key_name},
 	{"get-key-funcname", 0, 0, e_get_key_funcname},
 	{"getch", 0, 0, e_getch},
+	{"search-forward", 2, 2, e_search_forward},
+	{"display", 0, 0, e_display},
+	{"refresh", 0, 0, e_refresh},
 
 	{"beginning-of-buffer", 0, 0, e_top},
 	{"end-of-buffer", 0, 0, e_bottom},

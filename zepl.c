@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.6"
+#define E_VERSION       "v0.7"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -603,12 +603,18 @@ char *get_char()
 
 /* wrapper to simplify call and dependancies in the interface code */
 char *get_input_key() {	return (char *)get_key(khead, &key_return); }
-
 /* the name of the bound function of this key */
 char *get_key_funcname() { return (key_return != NULL ? key_return->k_funcname : ""); }
-
 /* the name of the last key */
 char *get_key_name() { return (key_return != NULL ? key_return->k_name : ""); }
+/* return point in current buffer */
+point_t get_point() { return curbp->b_point; }
+
+void set_point(point_t p)
+{
+	if (p < 0 || p > pos(curbp, curbp->b_ebuf)) return;
+	curbp->b_point = p;
+}
 
 point_t search_forward(buffer_t *bp, point_t start_p, char *stext)
 {
@@ -616,145 +622,21 @@ point_t search_forward(buffer_t *bp, point_t start_p, char *stext)
 	point_t p,pp;
 	char* s;
 
-	if (0 == strlen(stext))
-		return start_p;
+	if (0 == strlen(stext)) return start_p;
 
 	for (p=start_p; p < end_p; p++) {
 		for (s=stext, pp=p; *s == *(ptr(bp, pp)) && *s !='\0' && pp < end_p; s++, pp++)
 			;
-
-		if (*s == '\0')
-			return pp;
+		if (*s == '\0') return pp;
 	}
-
 	return -1;
 }
 
-void search()
-{
-	int cpos = 0;	
-	int c;
-	point_t o_point = curbp->b_point;
-	point_t found;
-
-	searchtext[0] = '\0';
-	msg("Search: %s", searchtext);
-	dispmsg();
-	cpos = strlen(searchtext);
-
-	for (;;) {
-		refresh();
-		c = getch();
-		/* ignore control keys other than C-g, backspace, CR,  C-s, C-R, ESC */
-		if (c < 32 && c != 07 && c != 0x08 && c != 0x13 && c != 0x12 && c != 0x1b)
-			continue;
-
-		switch(c) {
-		case 0x1b: /* esc */
-			searchtext[cpos] = '\0';
-			flushinp(); /* discard any escape sequence without writing in buffer */
-			return;
-		case 0x07: /* ctrl-g */
-			curbp->b_point = o_point;
-			return;
-		case 0x13: /* ctrl-s, do the search */
-			found = search_forward(curbp, curbp->b_point, searchtext);
-			if (found != -1 ) {
-				curbp->b_point = found;
-				msg("Search: %s", searchtext);
-				display();
-			} else {
-				msg("Failing Search: %s", searchtext);
-				dispmsg();
-				curbp->b_point = 0;
-			}
-			break;
-		case 0x7f: /* del, erase */
-		case 0x08: /* backspace */
-			if (cpos == 0)
-				continue;
-			searchtext[--cpos] = '\0';
-			msg("Search: %s", searchtext);
-			dispmsg();
-			break;
-		default:	
-			if (cpos < STRBUF_M - 1) {
-				searchtext[cpos++] = c;
-				searchtext[cpos] = '\0';
-				msg("Search: %s", searchtext);
-				dispmsg();
-			}
-			break;
-		}
-	}
+point_t search_forward_curbp(point_t start_p, char *stext) {
+	return search_forward(curbp, start_p, stext);
 }
 
-extern char *load_file(int);
-extern char *call_lisp(char *);
-extern void init_lisp(void);
-extern void reset_output_stream();
-
-void eval_block()
-{
-	char *output;
-	assert(curbp->b_mark != NOMARK);
-	assert(curbp->b_point > curbp->b_mark);
-
-	copy_cut(FALSE, FALSE);
-	assert(scrap != NULL);
-	assert(strlen(scrap) > 0);
-
-	reset_output_stream();
-	output = call_lisp((char *)scrap);
-	insert_string("\n");
-	insert_string(output);
-	reset_output_stream();
-}
-
-void user_func()
-{
-	char *output;
-	assert(key_return != NULL);
-	if (0 == strcmp(key_return->k_funcname, E_NOT_BOUND)) {
-		msg(E_NOT_BOUND);
-		return;
-	}
-
-	reset_output_stream();
-	output = call_lisp(key_return->k_funcname);
-
-	/* show errors on message line */
-	if (NULL != strstr(output, "error:")) {
-		char buf[81];
-		strncpy(buf, output, 80);
-		buf[80] ='\0';
-		msg(buf);
-	}	
-	reset_output_stream();
-}
-
-void load_config()
-{
-	char fname[300];
-	char *output;
-	int fd;
-
-	reset_output_stream();
-	(void)snprintf(fname, 300, "%s/%s", getenv("HOME"), E_INITFILE);
-
-	if ((fd = open(fname, O_RDONLY)) == -1)
-		fatal("failed to open " E_INITFILE " in HOME directory");
-
-	reset_output_stream();
-	output = load_file(fd);
-	assert(output != NULL);
-	close(fd);
-
-	/* all exceptions start with the word error: */
-	if (NULL != strstr(output, "error:"))
-		fatal(output);
-	reset_output_stream();
-}
+void user_func(void);
 
 keymap_t *new_key(char *name, char *bytes)
 {
@@ -849,6 +731,76 @@ int set_key(char *name, char *funcname)
 	return set_key_internal(name, funcname, "", NULL);
 }
 
+extern char *load_file(int);
+extern char *call_lisp(char *);
+extern void init_lisp(void);
+extern void reset_output_stream();
+
+void eval_block()
+{
+	char *output;
+
+	if (curbp->b_mark == NOMARK || curbp->b_mark >= curbp->b_point) {
+		msg("no block defined");
+		return;
+	}
+
+	copy_cut(FALSE, FALSE);
+	assert(scrap != NULL);
+	assert(strlen(scrap) > 0);
+
+	reset_output_stream();
+	output = call_lisp((char *)scrap);
+	insert_string("\n");
+	insert_string(output);
+	reset_output_stream();
+}
+
+void user_func()
+{
+	char *output;
+	assert(key_return != NULL);
+	if (0 == strcmp(key_return->k_funcname, E_NOT_BOUND)) {
+		msg(E_NOT_BOUND);
+		return;
+	}
+
+	reset_output_stream();
+	output = call_lisp(key_return->k_funcname);
+
+	/* show errors on message line */
+	if (NULL != strstr(output, "error:")) {
+		char buf[81];
+		strncpy(buf, output, 80);
+		buf[80] ='\0';
+		msg(buf);
+	}	
+	reset_output_stream();
+}
+
+void load_config()
+{
+	char fname[300];
+	char *output;
+	int fd;
+
+	reset_output_stream();
+	(void)snprintf(fname, 300, "%s/%s", getenv("HOME"), E_INITFILE);
+
+	if ((fd = open(fname, O_RDONLY)) == -1)
+		fatal("failed to open " E_INITFILE " in HOME directory");
+
+	reset_output_stream();
+	output = load_file(fd);
+	assert(output != NULL);
+	close(fd);
+
+	/* all exceptions start with the word error: */
+	if (NULL != strstr(output, "error:"))
+		fatal(output);
+	reset_output_stream();
+}
+
 void setup_keys()
 {
 	create_keys();
@@ -860,7 +812,6 @@ void setup_keys()
 	set_key_internal("c-n",     "(next-line)",           "\x0E", down);
 	set_key_internal("c-p",     "(previous-line)",       "\x10", up);
 	set_key_internal("c-h",     "(backspace)",           "\x08", backspace);
-	set_key_internal("c-s",     "(search)",              "\x13", search);
 	set_key_internal("c-v",     "(page-down)",           "\x16", pgdown);
 	set_key_internal("c-w",     "(kill-region)",         "\x17", kill_region);
 	set_key_internal("c-y",     "(yank)",                "\x19", yank);
