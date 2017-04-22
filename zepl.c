@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.7"
+#define E_VERSION       "v0.8"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -531,7 +531,7 @@ void delete()
 void set_mark()
 {
 	curbp->b_mark = (curbp->b_mark == curbp->b_point ? NOMARK : curbp->b_point);
-	if (curbp->b_mark != NOMARK) msg("Mark set");
+	(curbp->b_mark != NOMARK) ? msg("Mark set") : msg("Mark cleared");
 }
 
 void copy_cut(int cut, int verbose)

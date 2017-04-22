@@ -126,8 +126,6 @@
    ((eq line "") ())
    (t (setq ln (string->number line)) (beginning-of-buffer) (repeat (- ln 1) next-line)) ))
 
-
-
 ;;
 ;;  Key Bindings 
 ;;
