@@ -835,6 +835,7 @@ void setup_keys()
 	set_key_internal("c-x c-s", "(save-buffer)",         "\x18\x13", save_buffer);  
 	set_key_internal("c-x c-c", "(exit)",                "\x18\x03", quit);
 	set_key_internal("c-space", "(set-mark)",            "\x00", set_mark);
+	set_key_internal("c-]",     E_NOT_BOUND,             "\x1D", user_func);
 	set_key_internal("resize",  "(resize)",              "\x9A", resize_terminal);
 }
 
