@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define E_NAME          "zepl"
-#define E_VERSION       "v0.8"
+#define E_VERSION       "v0.9"
 #define E_LABEL         "Zepl:"
 #define E_NOT_BOUND	"<not bound>"
 #define E_INITFILE      "zepl.rc"
@@ -475,6 +475,7 @@ void up() { curbp->b_point = lncolumn(curbp, upup(curbp, curbp->b_point),curbp->
 void down() { curbp->b_point = lncolumn(curbp, dndn(curbp, curbp->b_point),curbp->b_col); }
 void lnbegin() { curbp->b_point = segstart(curbp, lnstart(curbp,curbp->b_point), curbp->b_point); }
 void quit() { done = 1; }
+void resize_terminal() { curbp->w_rows = LINES - 2; }
 
 void lnend()
 {
@@ -834,6 +835,7 @@ void setup_keys()
 	set_key_internal("c-x c-s", "(save-buffer)",         "\x18\x13", save_buffer);  
 	set_key_internal("c-x c-c", "(exit)",                "\x18\x03", quit);
 	set_key_internal("c-space", "(set-mark)",            "\x00", set_mark);
+	set_key_internal("resize",  "(resize)",              "\x9A", resize_terminal);
 }
 
 int main(int argc, char **argv)
