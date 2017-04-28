@@ -1022,6 +1022,7 @@ DEFINE_EDITOR_FUNC(pgdown)
 DEFINE_EDITOR_FUNC(pgup)
 DEFINE_EDITOR_FUNC(save_buffer)
 DEFINE_EDITOR_FUNC(quit)
+DEFINE_EDITOR_FUNC(eval_block)
 
 
 extern int set_key(char *, char *);
@@ -1147,6 +1148,22 @@ Object *stringToNumber(Object ** args, GC_PARAM)
 
 	double num = strtod(first->string, NULL);
 	return newNumber(num, GC_ROOTS);
+}
+
+/* 
+ * XXX could be improved to handle integers and decimals better 
+ * for example 121323.000000 (%f) is ugly but so is 1.213230e+05 (%g)
+ */
+Object *numberToString(Object ** args, GC_PARAM)
+{
+	char buf[40];
+	Object *first = (*args)->car;
+
+	if (first->type != TYPE_NUMBER)
+	    exceptionWithObject(first, "is not a number");
+
+	sprintf(buf, "%g", first->number);
+	return newStringWithLength(buf, strlen(buf), GC_ROOTS);
 }
 
 extern point_t search_forward_curbp(point_t, char *);
@@ -1342,6 +1359,7 @@ Primitive primitives[] = {
 	{"string.append", 2, 2, stringAppend},
 	{"string.substring", 3, 3, stringSubstring},
 	{"string->number", 1, 1, stringToNumber},
+	{"number->string", 1, 1, numberToString},
 
 	{"ascii", 1, 1, asciiToString},
 	{"ascii->number", 1, 1, asciiToNumber},
@@ -1351,7 +1369,8 @@ Primitive primitives[] = {
 	{"set-point", 1, 1, e_set_point},
 	{"get-point", 0, 0, e_get_point},
 	{"set-key", 2, 2, e_set_key},
-	{"prompt", 2, 2, e_prompt},	
+	{"prompt", 2, 2, e_prompt},
+	{"eval-block", 0, 0, e_eval_block},
 	{"get-char", 0, 0, e_get_char},
 	{"get-key", 0, 0, e_get_key},
 	{"get-key-name", 0, 0, e_get_key_name},

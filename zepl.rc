@@ -1,3 +1,4 @@
+;; -*-Lisp-*-
 ;;
 ;; ZEPL a tiny Emacs editor core with a tiny lisp extension language
 ;; hughbarney AT googlemail.com
@@ -126,6 +127,60 @@
    ((eq line "") ())
    (t (setq ln (string->number line)) (beginning-of-buffer) (repeat (- ln 1) next-line)) ))
 
+
+;;
+;; GNU Emacs style lisp interaction.
+;; Place cursor behind an s-expression, type C-] and the
+;; block will be evaluated.
+;;
+
+;; find the end of the s-expression and set cursor on next cell
+(defun find_end_p()
+  (setq k (get-char))
+  (cond 
+    ((eq 0 (get-point)) -1)
+    ((eq ")" k) (forward-char) (get-point))
+    ((or (eq " " k) (eq "\t" k) (eq "\n" k)) (backward-char) (find_end_p))
+    (t -1) ))
+
+;; skip backward out of a quoted string from a point inside the string
+(defun skip_string_backwards()
+  (setq ky (get-char))
+  (cond
+    ((eq 0 (get-point)) nil)
+    ((eq ky "\"") (backward-char) (if (eq "\\" (get-char)) (progn (backward-char) (skip_string_backwards))) t)
+    (t (backward-char) (skip_string_backwards)) ))
+
+;; find the start of the s-expression
+(defun find_start_p()
+  (setq kyy (get-char))
+  (cond 
+    ((and (eq 0 (get-point)) (not (eq kyy "("))) -1) 
+    ((and (eq lb_count rb_count) (> lb_count 0)) (get-point))
+    ((eq kyy "\"") (backward-char) (skip_string_backwards) (find_start_p))
+    ((eq kyy "(") (setq lb_count (+ lb_count 1)) (backward-char) (find_start_p))
+    ((eq kyy ")") (setq rb_count (+ rb_count 1)) (backward-char) (find_start_p))
+    (t (backward-char) (find_start_p)) ))
+
+;;
+;; find the start and end of the s-expression
+;; set the mark and the start and point at the end
+;; call eval-block
+(defun find_and_eval_sexp()
+  (setq lb_count 0)
+  (setq rb_count 0)
+  (setq start_p -1)
+  (setq end_p (find_end_p))
+  (if (> end_p -1) (setq start_p (find_start_p)))
+  (if (and (> start_p -1) (> end_p -1))
+  (progn
+    (set-point start_p)
+    (set-mark)
+    (set-point end_p)
+    (eval-block))
+  (progn
+    (message "could not find s-expression")) ))
+
 ;;
 ;;  Key Bindings 
 ;;
@@ -135,4 +190,5 @@
 (set-key "c-k" "(kill-to-eol)")
 (set-key "c-s" "(search)")
 (set-key "c-x ?" "(describe-key)")
+(set-key "c-]" "(find_and_eval_sexp)")
 
