@@ -1032,6 +1032,7 @@ extern char *get_key_name(void);
 extern char *get_key_funcname(void);
 extern void display_prompt_and_response(char *, char *);
 extern void msg(char *,...);
+extern void insert_string(char *);
 
 Object *e_get_char(Object **args, GC_PARAM) { return newStringWithLength(get_char(), 1, GC_ROOTS); }
 Object *e_get_key(Object **args, GC_PARAM) { return newString(get_input_key(), GC_ROOTS); }
@@ -1045,6 +1046,12 @@ Object *e_get_key_funcname(Object **args, GC_PARAM) { return newString(get_key_f
 	    exceptionWithObject(first, "is not a string");   \
 	if (second->type != TYPE_STRING)                     \
 	    exceptionWithObject(second, "is not a string");  
+
+#define ONE_STRING_ARG()                                    \
+	Object *first = (*args)->car;                        \
+	if (first->type != TYPE_STRING)                      \
+	    exceptionWithObject(first, "is not a string");
+
 
 Object *e_refresh(Object ** args, GC_PARAM)
 {
@@ -1243,10 +1250,15 @@ Object *e_load(Object ** args, GC_PARAM)
 
 Object *e_message(Object ** args, GC_PARAM)
 {
-	Object *first = (*args)->car;
-	if (first->type != TYPE_STRING)
-	    exceptionWithObject(first, "is not a string");
+	ONE_STRING_ARG();
 	msg(first->string);
+	return t;
+}
+
+Object *e_insert_string(Object ** args, GC_PARAM)
+{
+	ONE_STRING_ARG();
+	insert_string(first->string);
 	return t;
 }
 
@@ -1366,6 +1378,7 @@ Primitive primitives[] = {
 	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
 	{"message", 1, 1, e_message},
+	{"insert-string", 1, 1, e_insert_string},
 	{"set-point", 1, 1, e_set_point},
 	{"get-point", 0, 0, e_get_point},
 	{"set-key", 2, 2, e_set_key},

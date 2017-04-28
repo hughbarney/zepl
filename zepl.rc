@@ -167,6 +167,7 @@
 ;; set the mark and the start and point at the end
 ;; call eval-block
 (defun find_and_eval_sexp()
+  (setq o_point (get-point))
   (setq lb_count 0)
   (setq rb_count 0)
   (setq start_p -1)
@@ -179,6 +180,7 @@
     (set-point end_p)
     (eval-block))
   (progn
+    (set-point o_point)
     (message "could not find s-expression")) ))
 
 ;;
