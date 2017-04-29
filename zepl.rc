@@ -143,24 +143,16 @@
     ((or (eq " " k) (eq "\t" k) (eq "\n" k)) (backward-char) (find_end_p))
     (t -1) ))
 
-;; skip backward out of a quoted string from a point inside the string
-(defun skip_string_backwards()
-  (setq ky (get-char))
-  (cond
-    ((eq 0 (get-point)) nil)
-    ((eq ky "\"") (backward-char) (if (eq "\\" (get-char)) (progn (backward-char) (skip_string_backwards))) t)
-    (t (backward-char) (skip_string_backwards)) ))
-
 ;; find the start of the s-expression
+;; assumes start is always in first character of line
+;; this means comments and strings dont need to be handled
 (defun find_start_p()
+  (beginning-of-line)
   (setq kyy (get-char))
   (cond 
     ((and (eq 0 (get-point)) (not (eq kyy "("))) -1) 
-    ((and (eq lb_count rb_count) (> lb_count 0)) (get-point))
-    ((eq kyy "\"") (backward-char) (skip_string_backwards) (find_start_p))
-    ((eq kyy "(") (setq lb_count (+ lb_count 1)) (backward-char) (find_start_p))
-    ((eq kyy ")") (setq rb_count (+ rb_count 1)) (backward-char) (find_start_p))
-    (t (backward-char) (find_start_p)) ))
+    ((eq kyy "(") (get-point))
+    (t (previous-line) (find_start_p)) ))
 
 ;;
 ;; find the start and end of the s-expression
