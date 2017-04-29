@@ -15,11 +15,11 @@
   (cond ((> n 0) (func) (repeat (- n 1) func))))
 
 ;; concatenate a list of strings
-(defun concat(args)
+(defmacro concat args
   (cond
     ((null args) "")
     ((null (cdr args)) (car args))
-    (t (string.append (car args) (concat (cdr args))))))
+    (t (list (quote string.append) (car args) (cons (quote concat) (cdr args)))) ))
 
 ;; shrink string by dropping off last char
 (defun shrink(s)
@@ -117,7 +117,7 @@
   (setq key (get-key))
   (cond
     ((not (eq key "")) (message key))
-    (t (message (concat (list (get-key-name) " runs command " (get-key-funcname)))))))
+    (t (message (concat (get-key-name) " runs command " (get-key-funcname))))))
 
 ;; goto the line requested
 ;; (does not check for stupid responses yet)
@@ -140,7 +140,7 @@
   (cond 
     ((eq 0 (get-point)) -1)
     ((eq ")" k) (forward-char) (get-point))
-    ((or (eq " " k) (eq "\t" k) (eq "\n" k)) (backward-char) (find_end_p))
+    ((or (eq "" k) (eq " " k) (eq "\t" k) (eq "\n" k)) (backward-char) (find_end_p))
     (t -1) ))
 
 ;; find the start of the s-expression
@@ -173,7 +173,8 @@
     (eval-block))
   (progn
     (set-point o_point)
-    (message "could not find s-expression")) ))
+    (if (eq -1 start_p) (message "could not find start of s-expression"))
+    (if (eq -1 end_p) (message "could not find end of s-expression"))) ))
 
 ;;
 ;;  Key Bindings 
@@ -186,3 +187,6 @@
 (set-key "c-x ?" "(describe-key)")
 (set-key "c-]" "(find_and_eval_sexp)")
 
+;; temporary to assist with any issues with (find_and_eval_sexp)
+;;(set-key "c-q" "(find_end_p)")
+;;(set-key "c-r" "(find_start_p)")
