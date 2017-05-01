@@ -11,15 +11,25 @@
 ;; place zepl.rc in your home direcory and it is run when zepl starts up.
 ;;
 
-(defun repeat (n func)  
-  (cond ((> n 0) (func) (repeat (- n 1) func))))
-
 ;; concatenate a list of strings
 (defmacro concat args
   (cond
     ((null args) "")
     ((null (cdr args)) (car args))
     (t (list (quote string.append) (car args) (cons (quote concat) (cdr args)))) ))
+
+;; return filename relative to the homedir
+(defun home(fn)
+  (concat (os.getenv "HOME") "/" fn))
+
+;; the user should modify this value to where they wish to store scripts and extensions
+(setq script_dir (home "src/zepl/examples/"))
+
+(defun load_script(fn)
+  (load (concat script_dir fn)))
+
+(defun repeat (n func)  
+  (cond ((> n 0) (func) (repeat (- n 1) func))))
 
 ;; shrink string by dropping off last char
 (defun shrink(s)
@@ -121,12 +131,15 @@
 
 ;; goto the line requested
 ;; (does not check for stupid responses yet)
-(defun gotoline()
+(defun i_gotoline()
  (setq line (input "Goto line: " ""))
  (cond
-   ((eq line "") ())
-   (t (setq ln (string->number line)) (beginning-of-buffer) (repeat (- ln 1) next-line)) ))
+   ((eq line "") "")
+   (t (gotoline (string->number line))) ))
 
+(defun gotoline(ln)
+  (beginning-of-buffer)
+  (repeat (- ln 1) next-line))
 
 ;;
 ;; GNU Emacs style lisp interaction.
@@ -176,17 +189,20 @@
     (if (eq -1 start_p) (message "could not find start of s-expression"))
     (if (eq -1 end_p) (message "could not find end of s-expression"))) ))
 
+;; run our naughts and crosses game
+(defun run_oxo()
+  (load_script "oxo.lsp")
+  (oxo))
+
 ;;
 ;;  Key Bindings 
 ;;
 
 (set-key "esc-a" "(duplicate_line)")
-(set-key "esc-g" "(gotoline)")
+(set-key "esc-g" "(i_gotoline)")
 (set-key "c-k" "(kill-to-eol)")
 (set-key "c-s" "(search)")
 (set-key "c-x ?" "(describe-key)")
 (set-key "c-]" "(find_and_eval_sexp)")
+(set-key "c-x c-o" "(run_oxo)")
 
-;; temporary to assist with any issues with (find_and_eval_sexp)
-;;(set-key "c-q" "(find_end_p)")
-;;(set-key "c-r" "(find_start_p)")

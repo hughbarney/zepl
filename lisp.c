@@ -1173,6 +1173,15 @@ Object *numberToString(Object ** args, GC_PARAM)
 	return newStringWithLength(buf, strlen(buf), GC_ROOTS);
 }
 
+Object *os_getenv(Object ** args, GC_PARAM)
+{
+	ONE_STRING_ARG();
+
+	char *e = getenv(first->string);
+	if (e == NULL) return nil;
+	return newStringWithLength(e, strlen(e), GC_ROOTS);
+}
+
 extern point_t search_forward_curbp(point_t, char *);
 
 Object *e_search_forward(Object ** args, GC_PARAM)
@@ -1235,17 +1244,16 @@ Object *e_load(Object ** args, GC_PARAM)
 	    exceptionWithObject(first, "is not a string");
 
 	if ((fd = open(first->string, O_RDONLY)) == -1) {
-		snprintf(ebuf, 80, "failed to open %s", first->string);
+		snprintf(ebuf, 80, "failed to open %s\n", first->string);
 		ebuf[80] ='\0';
 		writeString(ebuf, &ostream);
 		close(fd);
 		return nil;
 	}
 
-	//debug("e_load() fd=%d\n", fd);	
-	load_file(fd);
+	char *out = load_file(fd);
 	close(fd);
-	return t;
+	return (NULL == strstr(out, "error:")) ? t : nil;
 }
 
 Object *e_message(Object ** args, GC_PARAM)
@@ -1366,17 +1374,18 @@ Primitive primitives[] = {
 	{"<=", 1, -1, primitiveLessEqual},
 	{">", 1, -1, primitiveGreater},
 	{">=", 1, -1, primitiveGreaterEqual},
+	{"number?", 1, 1, primitiveNumberQ},
 	{"string?", 1, 1, primitiveStringQ},
 	{"string.length", 1, 1, stringLength},
 	{"string.append", 2, 2, stringAppend},
 	{"string.substring", 3, 3, stringSubstring},
 	{"string->number", 1, 1, stringToNumber},
 	{"number->string", 1, 1, numberToString},
-
 	{"ascii", 1, 1, asciiToString},
 	{"ascii->number", 1, 1, asciiToNumber},
-	{"number?", 1, 1, primitiveNumberQ},
 	{"load", 1, 1, e_load},
+	{"os.getenv", 1, 1, os_getenv},
+
 	{"message", 1, 1, e_message},
 	{"insert-string", 1, 1, e_insert_string},
 	{"set-point", 1, 1, e_set_point},
