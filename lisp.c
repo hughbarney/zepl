@@ -1169,7 +1169,11 @@ Object *numberToString(Object ** args, GC_PARAM)
 	if (first->type != TYPE_NUMBER)
 	    exceptionWithObject(first, "is not a number");
 
-	sprintf(buf, "%g", first->number);
+	if (first->number == (long)first->number)
+		sprintf(buf, "%ld", (long)first->number);
+	else
+		sprintf(buf, "%lf", first->number);
+
 	return newStringWithLength(buf, strlen(buf), GC_ROOTS);
 }
 
