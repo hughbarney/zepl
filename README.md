@@ -205,6 +205,37 @@ The example shows how the editor can be extended.
     (set-key "esc-b" "(dobee)")
 ```
 
+## Invoking Tic-Tac-Toe in the Editor
+
+* Set the script directory in your copy of zepl.rc 
+
+For example suppose you built Zepl in a directory called zepl that sat under your HOME directory.
+
+```Lisp
+   ;; the user should modify this value to where they wish to store scripts and extensions
+   (setq script_dir (home "src/zepl/examples/"))
+```
+
+In this case you should change this line to:
+```Lisp
+   (setq script_dir (home "zepl/examples/"))
+```
+
+* start up zepl on an empty file.
+
+    $ zepl file.txt
+
+* invoke oxo by typing c-x c-o
+
+This will invoke the command run-oxo which is defined at the end of zepl.rc
+
+```Lisp
+   ;; run our naughts and crosses game
+   (defun run_oxo()
+   (load_script "oxo.lsp")
+   (oxo))
+```
+
 ## Build in Editor functions that can be called through lisp.
 
 	(beginning-of-buffer)                   # go to the beginning of the buffer
@@ -350,7 +381,6 @@ In order to be able to easily embed a Lisp interpretter into an application a sm
 
     Make Zepl handle multiple files       ;; this is fairly easy to do as I have 3 other editors that
 	                                  ;; implement this in about 120 lines.
-
 
 ## Copying
   Zepl is released to the public domain.
