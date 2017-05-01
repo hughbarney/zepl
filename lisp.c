@@ -106,6 +106,9 @@ static jmp_buf exceptionEnv;
 #ifdef __GNUC__
 void exceptionWithObject(Object * object, char *format, ...)
     __attribute__ ((noreturn, format(printf, 2, 3)));
+
+void writeFmt(Stream *, char *format, ...)
+    __attribute__ ((format(printf, 2, 3)));
 #endif
 
 void writeObject(Object * object, bool readably, Stream *);
@@ -135,13 +138,14 @@ void writeString(char *str, Stream *stream)
     }
 }
 
-void writeFmt(Stream *stream, char *fmt, ...)
+void writeFmt(Stream *stream, char *format, ...)
 {
     static char buf[WRITE_FMT_BUFSIZ];
     int nbytes;
+
     va_list args;
-    va_start(args, fmt);
-    nbytes = vsnprintf(buf, WRITE_FMT_BUFSIZ, fmt, args);
+    va_start(args, format);
+    nbytes = vsnprintf(buf, WRITE_FMT_BUFSIZ, format, args);
     va_end(args);
 
     switch (stream->type) {
@@ -189,7 +193,7 @@ void exceptionWithObject(Object * object, char *format, ...)
 
 	va_list args;
 	va_start(args, format);
-	(void)snprintf(buf, WRITE_FMT_BUFSIZ, format, args);
+	vsnprintf(buf, WRITE_FMT_BUFSIZ, format, args);
 	va_end(args);
 
 	writeString(buf, &ostream);
