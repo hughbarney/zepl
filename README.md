@@ -25,6 +25,8 @@ Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension
   Crosses (Tic-Tac-Toe) that runs in the Editor window itself.
 
 
+![zepl playing oxo](https://github.com/hughbarney/zepl/blob/master/screenshots/zepl-playing-oxo.png)
+
 ## Why the name Zepl ?
 
 Zepl is based on the Zep editor with a Read-Evaluate-Print-Loop (REPL).
