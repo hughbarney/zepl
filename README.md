@@ -16,7 +16,14 @@ Zepl is a Zep[8] based editor with a lisp extension language. The lisp extension
 * Provide a reference implementation to a standard way to embed a lisp interpretter to an application
 * Provide just enough editing features to be able to make small changes to files
 * Consist of a Tiny Editor core with as much of the editor as possible being implemented in lisp extensions
-* Provide a tiny experimental platform for playing around with Lisp
+* Provide a tiny experimental platform for playing around with Lisp and Editor extensions written in Tiny-Lisp
+
+* The result has totally surpassed my expectations. I have now been
+  able to implement some substantial parts of the Editor in Lisp. The
+  Tiny-Lisp codebase has proved very flexible. With the extensions I
+  have added I have been able to write a basic version of Naughts and
+  Crosses (Tic-Tac-Toe) that runs in the Editor window itself.
+
 
 ## Why the name Zepl ?
 
@@ -49,7 +56,7 @@ The one file limitation will be removed in the future once more lisp interaction
     esc-<   Start of file
     esc->   End of file
     esc-v   Page Up
-	esc-]   evaluate-block
+    esc-]   evaluate-block
 
     ^X^C  Exit. Any unsaved files will require confirmation.
     ^X^S  Save current buffer to disk, using the buffer's filename as the name of
@@ -65,9 +72,13 @@ The one file limitation will be removed in the future once more lisp interaction
 
 ## Key Bindings Implemented in Lisp
 
-    C-K   kill-to-eol
-    C-x ? describe-key
-	Esc-a duplicate-line
+    c-k   kill-to-eol
+    c-s   Search
+    c-x ? describe-key
+    c-]   find and evaluate last s-expression
+    esc-a duplicate-line
+    esc-g gotoline
+   
 
 ### Searching
     C-S enters the search prompt, where you type the search string
@@ -91,6 +102,18 @@ Generally, the procedure for copying or moving text is:
 3. Move the cursor to the desired location and yank it back (with ^Y).
 
 ## Lisp Interaction
+
+There are two ways to interract with Tiny-Lisp within Zepl.
+
+* You can use C-] to find the last s-expression above the cursor and send it to be evaluated.
+* You can mark a region and send the whole region to be evaluated.
+
+### Lisp Interaction - finding and evaluating the last s-expression
+
+This works in almost the same way as GNU Emacs in the scratch buffer.
+
+
+### Lisp Interaction - mark and evaluating a region
 
 Type a lisp function into the editor.
 
@@ -204,7 +227,8 @@ The example shows how the editor can be extended.
 	(string? symbol)                        # return true if symbol is a string
 	(string.append "string1" "string2"      # concatenate 2 strings returning a new string
         (string.substring string n1 n2          # return a substring of string from ref n1 to n2
-	(string->number s)                      # return a number converted from the string, eg "99" -> 99
+	(string->number s)                      # return a number converted from the string, eg "99" => 99
+        (number->string n)                      # return a strung representation of the number, eg 99.56 => "99.56"
 
 	(load "filename")                       # load and evaluate the lisp file
 	(message "the text of the message")     # set the message line
@@ -218,6 +242,46 @@ The example shows how the editor can be extended.
 	                                          only valid immediatley after a call to (get-key)
 	(get-key-funcname)                      # return the name of the function bound to the key
 	                                          only valid immediatley after a call to (get-key)
+
+	(getch)                                 # calls the c function getch and returns the keystroke
+                                                # blocks until a key is pressed
+
+	(insert-string "string")                # insert the string into the buffer at the current location
+	(set-point 1234)                        # set the point to the value specified
+	(get-point)                             # returns the current point
+	(set-key "key-name" "(lisp-func)")      # binds a key to a lisp function, see keynames see "Keys Names below"
+	(prompt)                                # prompts for a value on the command line and returns the response
+	(eval-block)                            # passes the marked region to be evaluated by lisp, displays the output
+
+
+
+	(search-forward 100 "accelerate")       # search forward from the point value passed in for the string supplied
+                                                # returns -1 if string is found or the point value of the match
+	(display)                               # calls the display function so that the screen is updated
+	(refresh)     
+
+
+## Key Names
+
+The following keynames are used for user key bindings
+
+* "c-a" to "c-z"                 Control-A to Control-Z  (Control-X, I and M are reserved)
+* "c-x c-a" to "c-x c-z"         Control-X folowed by Control-A to Control-Z
+* "esc-a" to "esc-z"             Escape-A to Escape-Z
+
+When using (set-key) the keyname must be supplied the formats above.
+The lisp function must be enclosed in brackets ().
+
+Examples:
+```lisp
+   
+    (set-key "esc-a" "(duplicate_line)")
+    (set-key "c-k" "(kill-to-eol)")
+    (set-key "c-x ?" "(describe-key)")
+```
+
+Key bindings cane be checked using describe-key (c-x ?).
+This is implemented in Lisp in the zepl.rc file.
 
 
 ## Swapping C code with Lisp
